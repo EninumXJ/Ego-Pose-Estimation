@@ -73,17 +73,27 @@ def main():
     val_loader = DataLoader(dataset=val_data, batch_size=args.batch_size, 
                             shuffle=False, num_workers=args.workers, pin_memory=True)
     
-    optimizer = torch.optim.SGD(model.parameters(),
-                                lr=args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
+    if(args.optimizer=='SGD'):
+        optimizer = torch.optim.SGD(model.parameters(),
+                                    lr=args.lr,
+                                    momentum=args.momentum,
+                                    weight_decay=args.weight_decay)
+    if(args.optimizer=='Adam'):
+        opt = [120, 10, 4000]
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=args.lr, betas=(0.9, 0.98), eps=1e-9
+            )
+        lr_scheduler = LambdaLR(
+            optimizer=optimizer, lr_lambda=lambda step: rate(step, *opt)
+        )
 
     if args.evaluate:
         validate(val_loader, model, 0)
         return
     for epoch in range(args.start_epoch, args.epochs):
         logger.info(" Training epoch: {}".format(epoch+1))
-        adjust_learning_rate(optimizer, epoch, args.lr_steps)
+        if(args.optimizer=='SGD'):
+            adjust_learning_rate(optimizer, epoch, args.lr_steps)
 
         # train for one epoch
         train(train_loader, model, optimizer, device, 200, logger)
@@ -116,7 +126,8 @@ def train(train_loader, model, optimizer, device, batch_num=None, logger=None):
     else:
         max_iter = batch_num
 
-    for i, (image, label, motion) in tqdm(enumerate(train_loader), total=max_iter):
+    model.train()
+    for i, (image, label, motion) in tqdm(enumerate(train_loader), total=len(train_loader)):
         data_time.update(time.time() - end)
         label = label.to(device)
         with torch.no_grad():
@@ -137,6 +148,8 @@ def train(train_loader, model, optimizer, device, batch_num=None, logger=None):
             #     print("clipping gradient: {} with coef {}".format(total_norm, args.clip_gradient / total_norm))
 
         optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -165,6 +178,7 @@ def validate(val_loader, model, device, batch_num=None, logger=None):
     else:
         max_iter = batch_num
 
+    model.eval()
     for i, (image, label, motion) in tqdm(enumerate(val_loader), total=max_iter):
         with torch.no_grad():
             label = label.to(device)
