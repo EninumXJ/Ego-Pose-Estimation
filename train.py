@@ -13,6 +13,7 @@ import os
 import time
 from tqdm import tqdm
 import logging
+from torch.optim.lr_scheduler import LambdaLR
 
 def main():
     global args, best_loss
@@ -73,20 +74,30 @@ def main():
     val_loader = DataLoader(dataset=val_data, batch_size=args.batch_size, 
                             shuffle=False, num_workers=args.workers, pin_memory=True)
     
-    optimizer = torch.optim.SGD(model.parameters(),
-                                lr=args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
+    if(args.optimizer=='SGD'):
+        optimizer = torch.optim.SGD(model.parameters(),
+                                    lr=args.lr,
+                                    momentum=args.momentum,
+                                    weight_decay=args.weight_decay)
+    if(args.optimizer=='Adam'):
+        opt = [256, 100, 4000]
+        optimizer = torch.optim.Adam(
+            model.parameters(), lr=args.lr, betas=(0.9, 0.98), eps=1e-9
+            )
+        lr_scheduler = LambdaLR(
+            optimizer=optimizer, lr_lambda=lambda step: rate(step, *opt)
+        )
 
     if args.evaluate:
         validate(val_loader, model, 0)
         return
     for epoch in range(args.start_epoch, args.epochs):
         logger.info(" Training epoch: {}".format(epoch+1))
-        adjust_learning_rate(optimizer, epoch, args.lr_steps)
+        if(args.optimizer=='SGD'):
+            adjust_learning_rate(optimizer, epoch, args.lr_steps)
 
         # train for one epoch
-        train(train_loader, model, optimizer, device, 200, logger)
+        train(train_loader, model, optimizer, lr_scheduler, device, 200, logger)
 
         # evaluate on validation set
         if (epoch + 1) % args.eval_freq == 0 or epoch == args.epochs - 1:
@@ -103,7 +114,7 @@ def main():
             }, save_path, is_best)
         # train(train_loader, model, optimizer, epoch, device)
 
-def train(train_loader, model, optimizer, device, batch_num=None, logger=None):
+def train(train_loader, model, optimizer, scheduler, device, batch_num=None, logger=None):
     # dataset_path = '/data1/lty/dataset/egopose_dataset/datasets'
     # config_path = '/data1/lty/dataset/egopose_dataset/datasets/meta/meta_subject_01.yml'
     batch_time = AverageMeter()
@@ -116,7 +127,7 @@ def train(train_loader, model, optimizer, device, batch_num=None, logger=None):
     else:
         max_iter = batch_num
 
-    for i, (image, label, motion) in tqdm(enumerate(train_loader), total=max_iter):
+    for i, (image, label, motion) in tqdm(enumerate(train_loader), total=len(train_loader)):
         data_time.update(time.time() - end)
         label = label.to(device)
         with torch.no_grad():
@@ -128,7 +139,7 @@ def train(train_loader, model, optimizer, device, batch_num=None, logger=None):
         
         loss = ComputeLoss(keypoint, head1, head2, label)
         losses.update(loss.item(), image.shape[0])
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
         loss.backward()
         ### gradient clip: 用来限制过大的梯度
         if args.clip_gradient is not None:
@@ -137,15 +148,18 @@ def train(train_loader, model, optimizer, device, batch_num=None, logger=None):
             #     print("clipping gradient: {} with coef {}".format(total_norm, args.clip_gradient / total_norm))
 
         optimizer.step()
+        scheduler.step()
+        optimizer.zero_grad()
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
         if i % args.print_freq == 0:
-            logger.info(" \tBatch({:>3}/{:>3}) done. Loss: {:.4f}".format(i+1, max_iter, loss.data.item()))
+            logger.info("lr: {:.5f} \tBatch({:>3}/{:>3}) done. Loss: {:.4f}".format(optimizer.param_groups[0]['lr'], i+1, max_iter, loss.data.item()))
 
-        if i > max_iter:
-            break
+
+        # if i > max_iter:
+        #     break
         # if i % args.print_freq == 0:
         #     print(('Epoch: [{0}][{1}/{2}], lr: {lr:.5f}\t'
         #           'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
@@ -164,8 +178,8 @@ def validate(val_loader, model, device, batch_num=None, logger=None):
         max_iter = len(val_loader)
     else:
         max_iter = batch_num
-
-    for i, (image, label, motion) in tqdm(enumerate(val_loader), total=max_iter):
+    model.eval()
+    for i, (image, label, motion) in tqdm(enumerate(val_loader), total=len(val_loader)):
         with torch.no_grad():
             label = label.to(device)
             foreground = build_foreground(image)
@@ -184,8 +198,8 @@ def validate(val_loader, model, device, batch_num=None, logger=None):
         if i % args.print_freq == 0:
             logger.info(" \tBatch({:>3}/{:>3}) done. Loss:{:.4f}".format(i+1, max_iter, loss.data.item()))
         
-        if i > max_iter:
-            break
+        # if i > max_iter:
+        #     break
         # if i % args.print_freq == 0:
         #     print(('Test: [{0}/{1}]\t'
         #           'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
@@ -272,6 +286,17 @@ def loadLogger(args):
     logger.addHandler(fHandler)
 
     return logger
+
+def rate(step, model_size, factor, warmup):
+    """
+    we have to default the step to 1 for LambdaLR function
+    to avoid zero raising to negative power.
+    """
+    if step == 0:
+        step = 1
+    return factor * (
+        model_size ** (-0.5) * min(step ** (-0.5), step * warmup ** (-1.5))
+    )
 
 def build_motion_history(R, d, nframes=31):
         batch = R.shape[0]

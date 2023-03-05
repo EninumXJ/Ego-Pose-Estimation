@@ -93,9 +93,47 @@ def poseRecover(image_path, frame_in_video, max_frames=30):
     # print("transform shape:", transform.shape)
 
 if __name__=='__main__':
-    image_path = '/data1/lty/dataset/egopose_dataset/datasets/fpv_frames/0213_take_01/'
-    frame_in_video = 50
-    transform = poseRecover(image_path, frame_in_video)
-    print(transform.shape)
-    null = torch.zeros([1, 13, 31], dtype=torch.float)
-    print(null)
+    import os
+    import yaml
+    fpv_path = "/home/liumin/litianyi/workspace/data/datasets/fpv_frames/"
+    meta_path = "/home/liumin/litianyi/workspace/data/datasets/meta/meta_cross_01.yml"
+    with open(meta_path, 'r') as f:
+        config = yaml.load(f.read(),Loader=yaml.FullLoader)
+    train_list = config['train']
+    config_path = "/home/liumin/litianyi/workspace/data/datasets/image_num.yml"
+    with open(config_path, 'r') as f:
+        num_config = yaml.load(f.read(),Loader=yaml.FullLoader)
+    dir_image_num = num_config["image_number"]
+    print(dir_image_num)
+    dirlist = os.listdir(fpv_path)
+    
+    for i in dirlist:
+        if(i[0] == 'r'):
+            continue
+        transform = torch.zeros([1, 13, 31])
+        image_dir = os.path.join(fpv_path, i)
+        print(image_dir)
+        ## 创建文件夹
+        feature_path = "/home/liumin/litianyi/workspace/data/datasets/features"
+        feature_path = os.path.join(feature_path, i)
+        print("feature path: ", feature_path)
+        if not os.path.exists(feature_path):
+            os.makedirs(feature_path)
+        max_num = dir_image_num[i]
+        for i in range(max_num):
+            # 取第i帧与第i-30帧之间的连续变换参数
+            if i < 31:
+                motion = torch.zeros([1, 13, 31])
+                transform = torch.cat([transform, motion], dim=0)
+            else:
+                try:
+                    motion = poseRecover(image_dir, i, max_frames=30)
+                except:
+                    motion = torch.zeros([1, 13, 31])
+                finally:
+                    transform = torch.cat([transform, motion], dim=0)
+        features = transform.numpy()
+        print("features shape: ", features.shape)
+        save_path = os.path.join(feature_path, "feature_30frames.npy")
+        print("save_path: ", save_path)
+        np.save(save_path, features)
