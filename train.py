@@ -80,7 +80,7 @@ def main():
                                     momentum=args.momentum,
                                     weight_decay=args.weight_decay)
     if(args.optimizer=='Adam'):
-        opt = [256, 100, 4000]
+        opt = [120, 10, 4000]
         optimizer = torch.optim.Adam(
             model.parameters(), lr=args.lr, betas=(0.9, 0.98), eps=1e-9
             )
@@ -127,6 +127,7 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
     else:
         max_iter = batch_num
 
+    model.train()
     for i, (image, label, motion) in tqdm(enumerate(train_loader), total=len(train_loader)):
         data_time.update(time.time() - end)
         label = label.to(device)
@@ -178,8 +179,9 @@ def validate(val_loader, model, device, batch_num=None, logger=None):
         max_iter = len(val_loader)
     else:
         max_iter = batch_num
+
     model.eval()
-    for i, (image, label, motion) in tqdm(enumerate(val_loader), total=len(val_loader)):
+    for i, (image, label, motion) in tqdm(enumerate(val_loader), total=max_iter):
         with torch.no_grad():
             label = label.to(device)
             foreground = build_foreground(image)
