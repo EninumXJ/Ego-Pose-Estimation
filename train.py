@@ -80,7 +80,7 @@ def main():
                                     momentum=args.momentum,
                                     weight_decay=args.weight_decay)
     if(args.optimizer=='Adam'):
-        opt = [120, 10, 4000]
+        opt = [256, 100, 4000]
         optimizer = torch.optim.Adam(
             model.parameters(), lr=args.lr, betas=(0.9, 0.98), eps=1e-9
             )
