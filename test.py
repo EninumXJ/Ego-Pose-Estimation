@@ -57,7 +57,7 @@ for i, (image, label, motion) in tqdm(enumerate(val_loader), total=len(val_loade
         motion_input = motion.to(device)
     
         keypoint, head1, head2 = model(foreground, motion_input)
-        keypoint, head1, head2 = model(foreground, motion_input)
+       
         
         image_name = 'Skeleton'+'_'+str(i)+'.jpg'
         image_path = os.path.join(save_path, image_name)

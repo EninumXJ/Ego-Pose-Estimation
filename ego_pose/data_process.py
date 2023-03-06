@@ -58,13 +58,6 @@ class MoCapDataset(Dataset):
             self.data_dict.append(range(length, length + self.data_sync[i][2] - self.data_sync[i][1]))
             length += self.data_sync[i][2] - self.data_sync[i][1]
 
-    def _get_video_ind(self):
-        self.data_dict = []
-        len = 0
-        for i in range(len(self.data_sync)):
-            self.data_dict.append(range(len, len + self.data_sync[i][2] - self.data_sync[i][1]))
-            len += self.data_sync[i][2] - self.data_sync[i][1]
-
     def _load_image(self, directory, idx):
         return Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('RGB')
 
@@ -84,7 +77,7 @@ class MoCapDataset(Dataset):
         return joint_offset
             
     def _load_rotation(self, traj, idx):
-        # bvh rotation: Z axis, X axis, Y axis
+        # bvh rotation: X axis, Y axis, Z axis
         # Hip has 6 channels: [translation, rotation]
         # idx: current frame in a bvh file
         # traj = pickle.load(open(directory, 'rb'))
@@ -111,27 +104,49 @@ class MoCapDataset(Dataset):
         r_LeftLeg = load_joint_rotation(traj, (60, 63), idx) 
         r_LeftFoot = load_joint_rotation(traj, (63, 66), idx) 
         
+        # R_hips = r_hips
+        # R_spine = R_hips@r_spine
+        # R_spine1 = R_spine@r_spine1
+        # R_spine2 = R_spine1@r_spine2
+        # R_spine3 = R_spine2@r_spine3
+        # R_neck = R_spine3@r_neck
+        # R_head = R_neck@r_head
+        # R_rightShoulder = R_spine3@r_RightShoulder
+        # R_rightArm = R_rightShoulder@r_RightArm
+        # R_rightForeArm = R_rightArm@r_RightForeArm
+        # R_rightHand = R_rightForeArm@r_RightHand
+        # R_leftShoulder = R_spine3@r_LeftShoulder
+        # R_leftArm = R_leftShoulder@r_LeftArm
+        # R_leftForeArm = R_leftArm@r_LeftForeArm
+        # R_leftHand = R_leftForeArm@r_LeftHand
+        # R_rightUpLeg = R_hips@r_RightUpLeg
+        # R_rightLeg = R_rightUpLeg@r_RightLeg
+        # R_rightFoot = R_rightLeg@r_RightFoot
+        # R_leftUpLeg = R_hips@r_LeftUpLeg
+        # R_leftLeg = R_leftUpLeg@r_LeftLeg
+        # R_leftFoot = R_leftLeg@r_LeftFoot
+
         R_hips = r_hips
-        R_spine = R_hips@r_spine
-        R_spine1 = R_spine@r_spine1
-        R_spine2 = R_spine1@r_spine2
-        R_spine3 = R_spine2@r_spine3
-        R_neck = R_spine3@r_neck
-        R_head = R_neck@r_head
-        R_rightShoulder = R_spine3@r_RightShoulder
-        R_rightArm = R_rightShoulder@r_RightArm
-        R_rightForeArm = R_rightArm@r_RightForeArm
-        R_rightHand = R_rightForeArm@r_RightHand
-        R_leftShoulder = R_spine3@r_LeftShoulder
-        R_leftArm = R_leftShoulder@r_LeftArm
-        R_leftForeArm = R_leftArm@r_LeftForeArm
-        R_leftHand = R_leftForeArm@r_LeftHand
-        R_rightUpLeg = R_hips@r_RightUpLeg
-        R_rightLeg = R_rightUpLeg@r_RightLeg
-        R_rightFoot = R_rightLeg@r_RightFoot
-        R_leftUpLeg = R_hips@r_LeftUpLeg
-        R_leftLeg = R_leftUpLeg@r_LeftLeg
-        R_leftFoot = R_leftLeg@r_LeftFoot
+        R_spine = r_spine@R_hips
+        R_spine1 = r_spine1@R_spine
+        R_spine2 = r_spine2@R_spine1
+        R_spine3 = r_spine3@R_spine2
+        R_neck = r_neck@R_spine3
+        R_head = r_head@R_neck
+        R_rightShoulder = r_RightShoulder@R_spine3
+        R_rightArm = r_RightArm@R_rightShoulder
+        R_rightForeArm = r_RightForeArm@R_rightArm
+        R_rightHand = r_RightHand@R_rightForeArm
+        R_leftShoulder = r_LeftShoulder@R_spine3
+        R_leftArm = r_LeftArm@R_leftShoulder
+        R_leftForeArm = r_LeftForeArm@R_leftArm
+        R_leftHand = r_LeftHand@R_leftForeArm
+        R_rightUpLeg = r_RightUpLeg@R_hips
+        R_rightLeg = r_RightLeg@R_rightUpLeg
+        R_rightFoot = r_RightFoot@R_rightLeg
+        R_leftUpLeg = r_LeftUpLeg@R_hips
+        R_leftLeg = r_LeftLeg@R_leftUpLeg
+        R_leftFoot = r_LeftFoot@R_leftLeg
         return {"translation":x_hips, "Hips":R_hips, "Spine":R_spine, "Spine1":R_spine1, "Spine2":R_spine2, "Spine3":R_spine3,
                 "Neck":R_neck, "Head":R_head, "RightShoulder":R_rightShoulder, "RightArm":R_rightArm, "RightForeArm":R_rightForeArm, 
                 "RightHand":R_rightHand, "LeftShoulder":R_leftShoulder, "LeftArm":R_leftArm, "LeftForeArm":R_leftForeArm, 
@@ -200,12 +215,14 @@ class MoCapDataset(Dataset):
         ind_frame_in_mocap = index - self.data_dict[ind][0] + self.data_sync[ind][1] #确定index所对应的mocap中的帧数
         #ind_frame_in_video = ind_frame_in_mocap - 4
         ind_frame_in_video = ind_frame_in_mocap + self.data_sync[ind][0]
-        # print("ind_frame_in_video: ", ind_frame_in_video)
-        # print("ind_frame_in_mocap: ", ind_frame_in_mocap)
+        print("index: ", index)
+        print("ind_frame_in_video: ", ind_frame_in_video)
+        print("ind_frame_in_mocap: ", ind_frame_in_mocap)
         # if(ind_frame_in_video < 32):
         #     print("index out of bounds")
         #     return
         dir = self.data_list[ind]
+        print("dir: ", dir)
         image_dir = os.path.join(self.dataset_path, "fpv_frames", dir)
         feature_path = os.path.join(self.dataset_path, "features", dir, "feature_30frames.npy")
         feature = np.load(feature_path)
