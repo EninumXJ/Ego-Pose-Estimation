@@ -204,6 +204,8 @@ class MoCapDataset(Dataset):
         # print("ind_frame_in_mocap: ", ind_frame_in_mocap)
         
         dir = self.data_list[ind]
+        print("dir: ", dir)
+        print("ind_frame_in_mocap: ", ind_frame_in_mocap)
         image_dir = os.path.join(self.dataset_path, "fpv_frames", dir)
         feature_path = os.path.join(self.dataset_path, "features", dir, "feature_10frames.npy")
         feature = np.load(feature_path)
