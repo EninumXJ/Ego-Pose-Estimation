@@ -255,7 +255,7 @@ if __name__=='__main__':
 
     dir = '0213_take_06'
     bvh_file = dir + ".bvh"
-    ind_frame_in_mocap = 496
+    ind_frame_in_mocap = 1560
     traj_path = '/home/liumin/litianyi/workspace/data/datasets/data'
     dataset_path = '/home/liumin/litianyi/workspace/data/datasets'
     bvh_path = os.path.join(dataset_path, "traj", bvh_file)
