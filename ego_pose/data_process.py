@@ -10,6 +10,7 @@ import math
 import numpy as np
 import torch.nn.functional as F
 from ego_pose.camera_pose_recover import *
+from utils.compute_keypoints import load_keypoints
 
 subject_config = "meta_subject_01.yaml"
 
@@ -208,6 +209,7 @@ class MoCapDataset(Dataset):
         print("ind_frame_in_mocap: ", ind_frame_in_mocap)
         image_dir = os.path.join(self.dataset_path, "fpv_frames", dir)
         feature_path = os.path.join(self.dataset_path, "features", dir, "feature_10frames.npy")
+        keypoints_path = os.path.join(self.dataset_path, "keypoints", dir+"_worldpos.csv")
         feature = np.load(feature_path)
         # print("feature shape: ", feature.shape)
         L = self.length
@@ -221,32 +223,18 @@ class MoCapDataset(Dataset):
         #     else:
         #         motion_batch = torch.cat((motion_batch, motion), 0)
         ### 这里的index +1是因为在提取特征时多提取了一个时刻，所以用来矫正误差
-       
+
+
         if(ind_frame_in_video-L+2 < 0 or ind_frame_in_mocap-L+1 < 0):
             motion = torch.zeros(L, 12*10)
             # label = torch.zeros(L, 51)
-            label = torch.zeros(L, 45)
+            label = torch.zeros(L, 51)
         else:
             motion_np = feature[ind_frame_in_video-L+2:ind_frame_in_video+2,:]
             motion = torch.from_numpy(motion_np).type(torch.float32)
             # print("motion shape: ", motion.shape)
-            keypoints_ = torch.from_numpy(np.load(os.path.join(self.dataset_path, "keypoints", dir + ".npy")))[ind_frame_in_mocap-L+1:ind_frame_in_mocap+1, :]
+            keypoints = load_keypoints(keypoints_path, ind_frame_in_mocap, L)[ind_frame_in_mocap-L+1:ind_frame_in_mocap+1, :]
             # print("keypoints_ shape: ", keypoints_.shape)
-            keypoints = keypoints_[:, 6:]
-            keypoints_x = keypoints[:,0:45:3]
-            keypoints_y = keypoints[:,1:45:3]
-            keypoints_z = keypoints[:,2:45:3]
-            f = keypoints_[:, 0:3]
-            u = keypoints_[:, 3:6]
-            ### 将keypoints映射到[-1,1]之间
-            d_max = torch.max(keypoints, dim=1)[0].unsqueeze(1)
-            # d_max shape: (batch)->(batch, 1)
-            d_min = torch.min(keypoints, dim=1)[0].unsqueeze(1)
-            # print("d_min shape: ", d_min.shape)
-            dst = d_max - d_min
-            # keypoints = torch.cat((keypoints_x, keypoints_y, keypoints_z), dim=-1)
-            keypoints = ((keypoints - d_min) / dst - 0.5) / 0.5      
-            # label = torch.cat([f, u, keypoints], dim=1)
             label = keypoints
         # print("label shape: ", label.shape)
         return motion.reshape(L, -1), label

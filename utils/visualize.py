@@ -5,14 +5,14 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # keypoints: ndarray [1, 51]
-def DrawSkeleton(keypoints, head1=None, head2=None, image_name='Skeleton.jpg'):
-    # pos_x = keypoints[0:45:3]
-    # pos_y = keypoints[1:45:3]
-    # pos_z = keypoints[2:45:3]
-    # head = keypoints[6:9]
+def DrawSkeleton(keypoints, offset=None, head1=None, head2=None, image_name='Skeleton.jpg'):
     pos_x = keypoints[0:len(keypoints):3]
     pos_y = keypoints[1:len(keypoints):3]
     pos_z = keypoints[2:len(keypoints):3]
+    if offset is not None:
+        pos_x = pos_x - offset[0]
+        pos_y = pos_y - offset[1]
+        pos_z = pos_z - offset[2]
     head = keypoints[6:9]
 
     xp = pos_x.T

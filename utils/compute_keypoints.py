@@ -7,6 +7,7 @@ import math
 import yaml
 import os
 from bvh import Bvh
+import pandas as pd
 
 def _load_keypoint_positon(rotation, offset):
     # hips = rotation['translation']@rotation['Hips']
@@ -127,6 +128,42 @@ def load_joint_rotation(traj, index, idx):
     if(index[1]-index[0] == 3):
         joint_rotation = traj[idx][index[0]:index[1]]
         return get_rotation_matrix(joint_rotation[0], joint_rotation[1], joint_rotation[2])
+
+def load_keypoints(filepath, ind_frame_in_mocap, length):
+    df = pd.read_csv(filepath, usecols=[1,2,3,4,5,6,7,8,9,10,11,12,19,20,21,22,23,24,25,26,27,34,35,36,37,38,
+                                    39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,121,122,123,
+                                    124,125,126,127,128,129,130,131,132,196,197,198,199,200,201,])
+    step = 4
+    ind_in_csv = (ind_frame_in_mocap-length+1)*step  # [0,4,8,...]
+    keypoints = df.iloc[ind_in_csv:(ind_frame_in_mocap+1)*step:step].values
+    keypoint = np.concatenate([keypoints[...,0:3],keypoints[...,-6:],keypoints[...,45:57],
+                               keypoints[...,33:45],keypoints[...,12:21], keypoints[...,3:12]], axis=-1)
+    # keypoint shape: (length, 51)
+    ## numpy->tensor
+    keypoint = torch.from_numpy(keypoint)
+    offset = torch.zeros([17, length, 3])
+    ### 将root平移到原点处
+    offset[..., 0] = keypoint[..., 0]
+    offset[..., 1] = keypoint[..., 1]
+    offset[..., 2] = keypoint[..., 2]
+    # shape: (length,51)-> 3*(length,17)
+    pos_x = keypoint[...,0:keypoint.shape[-1]:3]
+    pos_y = keypoint[...,1:keypoint.shape[-1]:3]
+    pos_z = keypoint[...,2:keypoint.shape[-1]:3]
+    pos_x = pos_x - offset.permute(1,0,2)[...,0]
+    pos_y = pos_y - offset.permute(1,0,2)[...,1]
+    pos_z = pos_z - offset.permute(1,0,2)[...,2]
+    # shape: (length,17)->(length,17,1)->(length,17,3)->(length,51)
+    keypoint = torch.cat([pos_x.unsqueeze(-1), pos_y.unsqueeze(-1), pos_z.unsqueeze(-1)], dim=-1).reshape(length,-1)
+    ### 将keypoints映射到[-1,1]之间
+    d_max = torch.max(keypoint, dim=-1)[0].unsqueeze(1)
+    # d_max shape: (batch)->(batch, 1)
+    d_min = torch.min(keypoint, dim=-1)[0].unsqueeze(1)
+    # print("d_min shape: ", d_min.shape)
+    dst = d_max - d_min
+    keypoint = ((keypoint - d_min) / dst - 0.5) / 0.5 
+    print("keypoint shape: ", keypoint.shape)
+    return keypoint
 
 if __name__=='__main__':
     dataset_path = '/data1/lty/dataset/egopose_dataset/datasets/'
