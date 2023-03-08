@@ -37,10 +37,10 @@ config_path = '/home/liumin/litianyi/workspace/data/datasets/meta/meta_subject_0
 ### load checkpoints if exist
 
 resume = 'logs/train14/transformer_model_best.pth.tar'
-# checkpoint = torch.load(resume)
-# model.load_state_dict(checkpoint['state_dict'])
+checkpoint = torch.load(resume)
+Model.load_state_dict(checkpoint['state_dict'])
 # model = nn.DataParallel(model, device_ids=[0,1]).cuda()
-# model.load_state_dict({k.replace('module.',''):v for k,v in torch.load(resume)['state_dict'].items()})   
+Model.load_state_dict({k.replace('module.',''):v for k,v in torch.load(resume)['state_dict'].items()})   
 Model = Model.to(device)
 val_data = MoCapDataset(dataset_path=dataset_path, 
                               config_path=config_path, 
@@ -57,14 +57,15 @@ val_data = MoCapDataset(dataset_path=dataset_path,
 
 val_loader = DataLoader(dataset=val_data, batch_size=1, 
                         shuffle=True, num_workers=1, pin_memory=True)
-keypoints_intro = torch.tensor(np.load("/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01.npy")).to(device)
-print(keypoints_intro.shape)
-d_max = torch.max(keypoints_intro, dim=1)[0].unsqueeze(1)
-# d_max shape: (batch)->(batch, 1)
-d_min = torch.min(keypoints_intro, dim=1)[0].unsqueeze(1)
-# print("d_min shape: ", d_min.shape)
-dst = d_max - d_min
-keypoints_intro = ((keypoints_intro - d_min) / dst - 0.5) / 0.5
+# keypoints_intro = torch.tensor(np.load("/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01.npy")).to(device)
+# keypoints_intro = torch.cat((keypoints_intro[:, 6:15], keypoints_intro[:, 18:27], keypoints_intro[:, 30:]), dim=-1)
+# print(keypoints_intro.shape)
+# d_max = torch.max(keypoints_intro, dim=1)[0].unsqueeze(1)
+# # d_max shape: (batch)->(batch, 1)
+# d_min = torch.min(keypoints_intro, dim=1)[0].unsqueeze(1)
+# # print("d_min shape: ", d_min.shape)
+# dst = d_max - d_min
+# keypoints_intro = ((keypoints_intro - d_min) / dst - 0.5) / 0.5
 Model.eval()
 for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
     label = label.to(device)
@@ -84,8 +85,8 @@ for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
     # output shape:(batch,length,pose_dim)label = label.to(device)
     memory = Model.model.encode(src, src_mask)
     # memory shape: (batch, length, feature_dim)
-    # ys = torch.zeros(1, 1, 45).fill_(0).type_as(src.data)
-    ys = keypoints_intro[1, 6:].reshape(1, 1, 45)
+    ys = torch.zeros(1, 1, 45).fill_(0).type_as(src.data)
+    # ys = keypoints_intro[1, :].reshape(1, 1, 45)
     for k in range(length - 1):
         out = Model.model.decode(
             memory, src_mask, ys, subsequent_mask(ys.size(1)).type_as(src.data)
@@ -94,6 +95,7 @@ for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
         # pose shape: (1, pose_dim)->(1, 1, pose_dim)
         ys = torch.cat([ys, pose], dim=1)
     # ys shape: (1, length, pose_dim)
+    label = torch.cat((label[..., 0:9], label[..., 12:21], label[..., 24:]), dim=-1)
     ys = ys.cpu().detach().numpy()
     label = label.cpu().detach().numpy()
     print("label shape: ", label.shape)
