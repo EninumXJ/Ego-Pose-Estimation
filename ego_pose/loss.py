@@ -54,16 +54,18 @@ def ComputeLoss_nohead(keypoints, label, L=15, order='xyz'):
     if order == 'xyz':
         RightShoulder = keypoints[..., 9:12]
         RightArm = keypoints[..., 12:15]
-        RightHand = keypoints[..., 15:18]
-        LeftShoulder = keypoints[..., 18:21]
-        LeftArm = keypoints[..., 21:24]
-        LeftHand = keypoints[..., 24:27]
-        RightUpLeg = keypoints[..., 27:30]
-        RightLeg = keypoints[..., 30:33]
-        RightFoot = keypoints[..., 33:36]
-        LeftUpLeg = keypoints[..., 36:39] 
-        LeftLeg = keypoints[..., 39:42]
-        LeftFoot = keypoints[..., 42:45]
+        RightForeArm = keypoints[..., 15:18]
+        RightHand = keypoints[..., 18:21]
+        LeftShoulder = keypoints[..., 21:24]
+        LeftArm = keypoints[..., 24:27]
+        LeftForeArm = keypoints[..., 27:30]
+        LeftHand = keypoints[..., 30:33]
+        RightUpLeg = keypoints[..., 33:36]
+        RightLeg = keypoints[..., 36:39]
+        RightFoot = keypoints[..., 39:42]
+        LeftUpLeg = keypoints[..., 42:45] 
+        LeftLeg = keypoints[..., 45:48]
+        LeftFoot = keypoints[..., 48:51]
     if order == 'xxx':
         RightShoulder = torch.cat(keypoints[..., 3], keypoints[..., 18], keypoints[..., 33], dim=-1)
         RightArm = torch.cat(keypoints[..., 4], keypoints[..., 19], keypoints[..., 34], dim=-1)
@@ -79,15 +81,17 @@ def ComputeLoss_nohead(keypoints, label, L=15, order='xyz'):
         LeftFoot = torch.cat(keypoints[..., 14], keypoints[..., 29], keypoints[..., 44], dim=-1)
 
     RightBone1 = BoneLength(RightShoulder, RightArm)
-    RightBone2 = BoneLength(RightArm, RightHand)
-    RightBone3 = BoneLength(RightUpLeg, RightLeg)
-    RightBone4 = BoneLength(RightLeg, RightFoot)
+    RightBone2 = BoneLength(RightArm, RightForeArm)
+    RightBone3 = BoneLength(RightForeArm, RightHand)
+    RightBone4 = BoneLength(RightUpLeg, RightLeg)
+    RightBone5 = BoneLength(RightLeg, RightFoot)
     LeftBone1 = BoneLength(LeftShoulder, LeftArm)
-    LeftBone2 = BoneLength(LeftArm, LeftHand)
-    LeftBone3 = BoneLength(LeftUpLeg, LeftLeg)
-    LeftBone4 = BoneLength(LeftLeg, LeftFoot)
+    LeftBone2 = BoneLength(LeftArm, LeftForeArm)
+    LeftBone3 = BoneLength(LeftForeArm, LeftHand)
+    LeftBone4 = BoneLength(LeftUpLeg, LeftLeg)
+    LeftBone5 = BoneLength(LeftLeg, LeftFoot)
     loss_s = torch.abs(RightBone1-LeftBone1) + torch.abs(RightBone2-LeftBone2) + \
-            torch.abs(RightBone3-LeftBone3) + torch.abs(RightBone4-LeftBone4)
+            torch.abs(RightBone3-LeftBone3) + torch.abs(RightBone4-LeftBone4) + torch.abs(RightBone5-LeftBone5)
 
     # print("loss_s: ", loss_s.shape)
     return (loss_s + loss_d)/L

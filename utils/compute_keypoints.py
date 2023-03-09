@@ -162,7 +162,7 @@ def load_keypoints(filepath, ind_frame_in_mocap, length):
     # print("d_min shape: ", d_min.shape)
     dst = d_max - d_min
     keypoint = ((keypoint - d_min) / dst - 0.5) / 0.5 
-    print("keypoint shape: ", keypoint.shape)
+    # shape: (length,51)
     return keypoint
 
 if __name__=='__main__':

@@ -29,7 +29,7 @@ def main():
     best_loss = 1e10
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = EgoViT(N=args.N, d_model=120, d_ff=args.dff, pose_dim=45, h=args.h, dropout=args.dropout)
+    model = EgoViT(N=args.N, d_model=120, d_ff=args.dff, pose_dim=51, h=args.h, dropout=args.dropout)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model, device_ids=args.gpus).cuda()
     else:
@@ -148,6 +148,9 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
         # src shape:(batch,length,feature_dim)
         src_mask = (src.sum(axis=-1) != 0).squeeze(-1).unsqueeze(-2)
         # src_mask shape:(batch,1,length)
+        tgt = tgt[:, :-1, :]
+        # print("tgt shape: ", tgt.shape)
+        # tgt shape:(batch,21,51)
         tgt_mask = (tgt.sum(axis=-1) != 0).squeeze(-1).unsqueeze(-2)
         # tgt_mask shape:(batch,1,length)
         mask_ = torch.tensor(subsequent_mask(tgt.size(-2)).type_as(tgt_mask.data))
@@ -156,17 +159,14 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
         # tgt_mask shape:(batch,length,length)
         output = model(src, tgt, src_mask, tgt_mask)
         # output shape:(batch,length,pose_dim)
-        loss = ComputeLoss_nohead(output, label, args.L, order='xyz')
+        loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz')
         losses.update(loss.item(), label.shape[0])
         # optimizer.zero_grad()
         loss.backward()
         ### gradient clip: 用来限制过大的梯度
         if args.clip_gradient is not None:
             total_norm = clip_grad_norm(model.parameters(), args.clip_gradient)
-            # if total_norm > args.clip_gradient:
-            #     print("clipping gradient: {} with coef {}".format(total_norm, args.clip_gradient / total_norm))
 
-        
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad()
@@ -205,6 +205,7 @@ def validate(val_loader, model, device, batch_num=None, logger=None, args=None):
             src = motion.to(device)
             # src shape:(batch,length,feature_dim)
             src_mask = (src.sum(axis=-1) != 0).squeeze(-1).unsqueeze(-2)
+            tgt = tgt[:, :-1, :]
             # src_mask shape:(batch,1,length)
             tgt_mask = (tgt.sum(axis=-1) != 0).squeeze(-1).unsqueeze(-2)
             # tgt_mask shape:(batch,1,length)

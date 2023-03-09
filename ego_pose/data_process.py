@@ -205,8 +205,8 @@ class MoCapDataset(Dataset):
         # print("ind_frame_in_mocap: ", ind_frame_in_mocap)
         
         dir = self.data_list[ind]
-        print("dir: ", dir)
-        print("ind_frame_in_mocap: ", ind_frame_in_mocap)
+        # print("dir: ", dir)
+        # print("ind_frame_in_mocap: ", ind_frame_in_mocap)
         image_dir = os.path.join(self.dataset_path, "fpv_frames", dir)
         feature_path = os.path.join(self.dataset_path, "features", dir, "feature_10frames.npy")
         keypoints_path = os.path.join(self.dataset_path, "keypoints", dir+"_worldpos.csv")
@@ -223,21 +223,30 @@ class MoCapDataset(Dataset):
         #     else:
         #         motion_batch = torch.cat((motion_batch, motion), 0)
         ### 这里的index +1是因为在提取特征时多提取了一个时刻，所以用来矫正误差
+        ### 在提取一个20帧的视频序列时，我们会增加两帧，象征序列的开始和结束
+        start_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01_worldpos.csv"
+        end_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/1205_take_15_worldpos.csv"
+        start_pose = load_keypoints(start_pose_path, 0, 1)
+        # shape: (1,51)
+        end_pose = load_keypoints(end_pose_path, 1000, 1)
 
+        start_motion = torch.zeros(1, 12*10)
+        end_motion = torch.ones(1, 12*10)
 
         if(ind_frame_in_video-L+2 < 0 or ind_frame_in_mocap-L+1 < 0):
             motion = torch.zeros(L, 12*10)
             # label = torch.zeros(L, 51)
-            label = torch.zeros(L, 51)
+            keypoints = torch.zeros(L, 51)
         else:
             motion_np = feature[ind_frame_in_video-L+2:ind_frame_in_video+2,:]
-            motion = torch.from_numpy(motion_np).type(torch.float32)
+            motion = torch.from_numpy(motion_np).type(torch.float32).reshape(L, -1)
             # print("motion shape: ", motion.shape)
-            keypoints = load_keypoints(keypoints_path, ind_frame_in_mocap, L)[ind_frame_in_mocap-L+1:ind_frame_in_mocap+1, :]
+            keypoints = load_keypoints(keypoints_path, ind_frame_in_mocap, L)
             # print("keypoints_ shape: ", keypoints_.shape)
-            label = keypoints
+        label = torch.cat([start_pose, keypoints, end_pose], dim=0)
+        motion = torch.cat([start_motion, motion, end_motion], dim=0)
         # print("label shape: ", label.shape)
-        return motion.reshape(L, -1), label
+        return motion, label
 
     def __len__(self):
         len = 0 

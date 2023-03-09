@@ -12,7 +12,8 @@ from torch.nn.utils import clip_grad_norm
 import os
 import time
 from tqdm import tqdm
-from utils.visualize import DrawSkeleton45
+from utils.visualize import DrawSkeleton45, DrawSkeleton
+from utils.compute_keypoints import load_keypoints
 
 def inference(model, src, src_mask):
     memory = model.model.encode(src, src_mask)
@@ -24,19 +25,19 @@ def inference(model, src, src_mask):
         )
     return ys
          
-exp_name = 'train14'
+exp_name = 'train18'
 length = 20
 path = os.getcwd()
 save_path = os.path.join(path, 'results', exp_name)
 if not os.path.exists(save_path):
     os.makedirs(save_path) 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-Model = EgoViT(N=16, d_model=120, d_ff=1440, pose_dim=45, h=10, dropout=0.1)
+Model = EgoViT(N=16, d_model=120, d_ff=1440, pose_dim=51, h=10, dropout=0.1)
 dataset_path = '/home/liumin/litianyi/workspace/data/datasets'
 config_path = '/home/liumin/litianyi/workspace/data/datasets/meta/meta_subject_01.yml'
 ### load checkpoints if exist
 
-resume = 'logs/train14/transformer_model_best.pth.tar'
+resume = 'logs/train18/transformer_model_best.pth.tar'
 checkpoint = torch.load(resume)
 Model.load_state_dict(checkpoint['state_dict'])
 # model = nn.DataParallel(model, device_ids=[0,1]).cuda()
@@ -67,6 +68,12 @@ val_loader = DataLoader(dataset=val_data, batch_size=1,
 # dst = d_max - d_min
 # keypoints_intro = ((keypoints_intro - d_min) / dst - 0.5) / 0.5
 Model.eval()
+start_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01_worldpos.csv"
+end_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/1205_take_15_worldpos.csv"
+start_pose = load_keypoints(start_pose_path, 0, 1)
+# shape: (1,51)
+end_pose = load_keypoints(end_pose_path, 1000, 1)
+
 for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
     label = label.to(device)
     tgt = label
@@ -85,8 +92,8 @@ for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
     # output shape:(batch,length,pose_dim)label = label.to(device)
     memory = Model.model.encode(src, src_mask)
     # memory shape: (batch, length, feature_dim)
-    ys = torch.zeros(1, 1, 45).fill_(0).type_as(src.data)
-    # ys = keypoints_intro[1, :].reshape(1, 1, 45)
+    ys = start_pose.unsqueeze(1).to(device)
+    
     for k in range(length - 1):
         out = Model.model.decode(
             memory, src_mask, ys, subsequent_mask(ys.size(1)).type_as(src.data)
@@ -95,7 +102,7 @@ for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
         # pose shape: (1, pose_dim)->(1, 1, pose_dim)
         ys = torch.cat([ys, pose], dim=1)
     # ys shape: (1, length, pose_dim)
-    label = torch.cat((label[..., 0:9], label[..., 12:21], label[..., 24:]), dim=-1)
+    # label = torch.cat((label[..., 0:9], label[..., 12:21], label[..., 24:]), dim=-1)
     ys = ys.cpu().detach().numpy()
     label = label.cpu().detach().numpy()
     print("label shape: ", label.shape)
@@ -108,5 +115,5 @@ for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
         # head1 = ys[:, j, 0:3]
         # head2 = ys[:, j, 3:6]
         label_ = label[:, j, :]
-        DrawSkeleton45(label_.squeeze(0)[:], head1=None, head2=None, image_name=label_path)
-        DrawSkeleton45(keypoint[0], head1=None, head2=None, image_name=image_path)
+        DrawSkeleton(label_.squeeze(0)[:], head1=None, head2=None, image_name=label_path)
+        DrawSkeleton(keypoint[0], head1=None, head2=None, image_name=image_path)

@@ -239,7 +239,7 @@ class Embeddings(nn.Module):
 		self.d_model = d_model
 	
 	def forward(self, x):
-		return F.relu(self.lut(x))
+		return F.relu(self.lut(x.to(torch.float32)))
 
 ### EgoViT:模型主要代码
 # 参数：
