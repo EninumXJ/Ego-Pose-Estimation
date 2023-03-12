@@ -3,13 +3,13 @@ import yaml
 from torch.utils.data import Dataset
 import torch
 from PIL import Image
-from mocap.pose import load_bvh_file, interpolated_traj
 from bvh import Bvh
 import pickle
 import math
 import numpy as np
 import torch.nn.functional as F
-from ego_pose.camera_pose_recover import *
+# from ego_pose.camera_pose_recover import *
+# from mocap.pose import load_bvh_file, interpolated_traj
 import pandas as pd
 
 subject_config = "meta_subject_01.yaml"
@@ -185,7 +185,7 @@ class MoCapDataset(Dataset):
     #     LeftLeg = LeftUpLeg + rotation['LeftLeg']@offset['LeftLeg']
     #     LeftFoot = LeftLeg + rotation['LeftFoot']@offset['LeftFoot']
     #     return torch.cat([hips.T, neck.T, head.T, RightShoulder.T, RightArm.T, RightHand.T, LeftShoulder.T, LeftArm.T,
-                          LeftHand.T, RightUpLeg.T, RightLeg.T, RightFoot.T, LeftUpLeg.T, LeftLeg.T, LeftFoot.T], dim=-1)
+                        #   LeftHand.T, RightUpLeg.T, RightLeg.T, RightFoot.T, LeftUpLeg.T, LeftLeg.T, LeftFoot.T], dim=-1)
 
     def load_keypoints(self, filepath, ind_frame_in_mocap, length):
         df = pd.read_csv(filepath, usecols=[1,2,3,4,5,6,7,8,9,10,11,12,19,20,21,22,23,24,25,26,27,34,35,36,37,38,
@@ -285,8 +285,138 @@ class MoCapDataset(Dataset):
     
 
 class EgoMotionDataset(Dataset):
-    def __init__():
+    def __init__(self, dataset_path, config_path, image_tmpl, image_transform=None, mocap_fr=30, L=20, test_mode=False, scene='lab'):
+        with open(config_path, 'r') as f:
+            config = yaml.load(f.read(), Loader=yaml.FullLoader)
+        self.dataset_path = dataset_path
+        self.test_mode = test_mode
+        if self.test_mode == False:
+            self.data_list = config['train']
+        else:
+            self.data_list = config['test']
+           
+        self.mocap_frames = config['mocap_frames']
+        self.video_frames = config['video_frames']
+        self.mocap_fr = mocap_fr
+        self.image_tmpl = image_tmpl
+        self.transform = image_transform
+        self.length = L
+        self.data_dict = []
+        self.dir_name = []   # "02_01_walk/1"
+        len = 0
+        for i in self.data_list:  # 02_01_walk
+            for j in self.video_frames[i][scene]: # 1,2,...,6
+                self.dir_name.append(i+'_'+j)
+                self.data_dict.append(range(len, len + min(self.video_frames[i][scene][j]+1, self.mocap_frames[i])))
+                len += min(self.video_frames[i][scene][j]+1, self.mocap_frames[i])
+
+    def load_keypoints(self, filepath, ind_frame, length):
+        df = pd.read_csv(filepath,usecols=[1,2,3,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,
+                                   40,41,42,43,44,45,46,47,48,49,50,51,70,71,72,73,74,75,
+                                   82,83,84,85,86,87,88,89,90,100,101,102,103,104,105,106,107,108])
+        step = 4    # mocap_fr=120, video_fr=30!
+        ind_in_csv = (ind_frame-length+1)*step  # [0,4,8,...]
+        keypoints = df.iloc[ind_in_csv:(ind_frame+1)*step:step].values
+        #(hips,spine1,neck1,head,rightarm,rightforearm,righthand,leftarm,leftforearm,
+        # lefthand,rightupleg,rigthleg,rightfoot,leftupleg,leftleg,leftfoot)
+        keypoint = np.concatenate([keypoints[0:3],keypoints[6:9],keypoints[33:39],keypoints[12:21],
+                           keypoints[24:33],keypoints[39:48], keypoints[48:57]])
+        # keypoint shape: (length, 48)
+        ## numpy->tensor
+        keypoint = torch.from_numpy(keypoint)
+        offset = torch.zeros([16, length, 3])
+         ### 将root平移到原点处
+        offset[..., 0] = keypoint[..., 0]
+        offset[..., 1] = keypoint[..., 1]
+        offset[..., 2] = keypoint[..., 2]
+        # shape: (length,48)-> 3*(length,16)
+        pos_x = keypoint[...,0:keypoint.shape[-1]:3]
+        pos_y = keypoint[...,1:keypoint.shape[-1]:3]
+        pos_z = keypoint[...,2:keypoint.shape[-1]:3]
+        pos_x = pos_x - offset.permute(1,0,2)[...,0]
+        pos_y = pos_y - offset.permute(1,0,2)[...,1]
+        pos_z = pos_z - offset.permute(1,0,2)[...,2]
+        # shape: (length,16)->(length,16,1)->(length,16,3)->(length,48)
+        keypoint = torch.cat([pos_x.unsqueeze(-1), pos_y.unsqueeze(-1), pos_z.unsqueeze(-1)], dim=-1).reshape(length,-1)
+        ### 将keypoints映射到[-1,1]之间
+        d_max = torch.max(keypoint, dim=-1)[0].unsqueeze(1)
+        # d_max shape: (batch)->(batch, 1)
+        d_min = torch.min(keypoint, dim=-1)[0].unsqueeze(1)
+        # print("d_min shape: ", d_min.shape)
+        dst = d_max - d_min
+        keypoint = ((keypoint - d_min) / dst - 0.5) / 0.5 
+        # shape: (length,48)
+        return keypoint
 
     def __len__(self):
+        return self.data_dict[-1][-1]
 
-    def __getitem__(self):
+    def __getitem__(self, index):
+        ind_bool = [index in i for i in self.data_dict]
+        ind = ind_bool.index(True)  # ind表示该index属于第ind个视频
+        ind_frame = index - self.data_dict[ind][0]
+
+        dir = self.dir_name[ind][:-2]
+        print("dir: ", dir)
+        sub_dir = self.dir_name[ind][-1]
+        print("sub_dir: ", sub_dir)
+        feature_path = os.path.join(self.dataset_path, "features", dir, self.scene, sub_dir, "feature_10frames.npy")
+        keypoints_path = os.path.join(self.dataset_path, "keypoints", dir+"_worldpos.csv")
+        feature = np.load(feature_path)
+        print("feature shape: ", feature.shape)
+        L = self.length 
+
+        ################# 
+        start_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01_worldpos.csv"
+        end_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/1205_take_15_worldpos.csv"
+        start_pose = self.load_keypoints(start_pose_path, 0, 1)
+        # shape: (1,48)
+        end_pose = self.load_keypoints(end_pose_path, 1000, 1)
+
+        start_motion = torch.zeros(1, 12*10)
+        end_motion = torch.ones(1, 12*10)
+        if(ind_frame-L+2 < 0):
+            motion = torch.zeros(L, 12*10)
+            keypoints = torch.zeros(L, 48)
+        else:
+            motion_np = feature[ind_frame-L+2:ind_frame+2,:]
+            motion = torch.from_numpy(motion_np).type(torch.float32).reshape(L, -1)
+            # print("motion shape: ", motion.shape)
+            keypoints = self.load_keypoints(keypoints_path, ind_frame, L)
+            # print("keypoints_ shape: ", keypoints_.shape)
+        label = torch.cat([start_pose, keypoints, end_pose], dim=0)
+        motion = torch.cat([start_motion, motion, end_motion], dim=0)
+        # print("label shape: ", label.shape)
+        return motion, label
+
+if __name__=='__main__':
+    config_path = '/home/liumin/litianyi/workspace/data/EgoMotion/meta_remy.yml'
+    dataset_path = '/home/liumin/litianyi/workspace/data/EgoMotion'
+    dataset = EgoMotionDataset(dataset_path=dataset_path,
+                               config_path=config_path,
+                               image_tmpl="{:04d}.jpg", 
+                                L=20,
+                                test_mode=False)
+    from torch.utils.data import DataLoader
+    train_loader = DataLoader(dataset=dataset, batch_size=16, 
+                              shuffle=True,num_workers=8, pin_memory=True)
+    for i, (motion, label) in enumerate(train_loader):
+        print("motion shape: ", motion.shape)
+        print("label shape: ", label.shape)
+    # with open(config_path, 'r') as f:
+    #     config = yaml.load(f.read(), Loader=yaml.FullLoader)
+    # data_list = config['train']
+    # mocap_frames = config['mocap_frames']
+    # video_frames = config['video_frames']
+    # data_dict = []
+    # scene = 'lab'
+    # len = 0
+    # for i in data_list:  # 02_01_walk
+    #     for j in video_frames[i][scene]: # 1,2,...,6
+    #         # print("dir: ", i)
+    #         # print("sub_dir: ", j)
+    #         # print("video frames: ", video_frames[i][scene][j])
+    #         # print("mocap frames: ", mocap_frames[i])
+    #         data_dict.append(range(len, len + min(video_frames[i][scene][j]+1, mocap_frames[i])))
+    #         len += min(video_frames[i][scene][j]+1, mocap_frames[i])
+    # print(data_dict[-1][-1])
