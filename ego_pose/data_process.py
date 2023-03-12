@@ -10,7 +10,7 @@ import math
 import numpy as np
 import torch.nn.functional as F
 from ego_pose.camera_pose_recover import *
-from utils.compute_keypoints import load_keypoints
+import pandas as pd
 
 subject_config = "meta_subject_01.yaml"
 
@@ -36,6 +36,7 @@ def load_joint_rotation(traj, index, idx):
         joint_rotation = traj[idx][index[0]:index[1]]
         return get_rotation_matrix(joint_rotation[0], joint_rotation[1], joint_rotation[2])
 
+### Load Dataset By Yuan Ye
 class MoCapDataset(Dataset):
     def __init__(self, dataset_path, config_path, image_tmpl, image_transform=None, mocap_fr=30, L=20, test_mode=False):
         with open(config_path, 'r') as f:
@@ -159,41 +160,68 @@ class MoCapDataset(Dataset):
         return f.T, u.T
 
     # 读取身体各个关节在本地坐标系中的坐标位置 一个包含51个元素的tensor
-    def _load_keypoint_positon(self, rotation, offset):
-        # hips = rotation['translation']@rotation['Hips']
-        hips = rotation['translation']
-        spine3 = hips + rotation['Spine']@offset['Spine'] \
-                    + rotation['Spine1']@offset['Spine1'] \
-                    + rotation['Spine2']@offset['Spine2'] \
-                    + rotation['Spine3']@offset['Spine3'] 
-        neck = spine3 + rotation['Neck']@offset['Neck']
-        head = neck + rotation['Head']@offset['Head']
-        RightShoulder = spine3 + rotation['RightShoulder']@offset['RightShoulder']
-        RightArm = RightShoulder + rotation['RightArm']@offset['RightArm']
-        RightForeArm = RightArm + rotation['RightForeArm']@offset['RightForeArm']
-        RightHand = RightForeArm + rotation['RightHand']@offset['RightHand']
-        LeftShoulder = spine3 + rotation['LeftShoulder']@offset['LeftShoulder']
-        LeftArm = LeftShoulder + rotation['LeftArm']@offset['LeftArm']
-        LeftForeArm = LeftArm + rotation['LeftForeArm']@offset['LeftForeArm']
-        LeftHand = LeftForeArm + rotation['LeftHand']@offset['LeftHand']
-        RightUpLeg = hips + rotation['RightUpLeg']@offset['RightUpLeg']
-        RightLeg = RightUpLeg + rotation['RightLeg']@offset['RightLeg']
-        RightFoot = RightLeg + rotation['RightFoot']@offset['RightFoot']
-        LeftUpLeg = hips + rotation['LeftUpLeg']@offset['LeftUpLeg']
-        LeftLeg = LeftUpLeg + rotation['LeftLeg']@offset['LeftLeg']
-        LeftFoot = LeftLeg + rotation['LeftFoot']@offset['LeftFoot']
-        return torch.cat([hips.T, neck.T, head.T, RightShoulder.T, RightArm.T, RightHand.T, LeftShoulder.T, LeftArm.T,
+    
+    # def _load_keypoint_positon(self, rotation, offset):
+    #     # hips = rotation['translation']@rotation['Hips']
+    #     hips = rotation['translation']
+    #     spine3 = hips + rotation['Spine']@offset['Spine'] \
+    #                 + rotation['Spine1']@offset['Spine1'] \
+    #                 + rotation['Spine2']@offset['Spine2'] \
+    #                 + rotation['Spine3']@offset['Spine3'] 
+    #     neck = spine3 + rotation['Neck']@offset['Neck']
+    #     head = neck + rotation['Head']@offset['Head']
+    #     RightShoulder = spine3 + rotation['RightShoulder']@offset['RightShoulder']
+    #     RightArm = RightShoulder + rotation['RightArm']@offset['RightArm']
+    #     RightForeArm = RightArm + rotation['RightForeArm']@offset['RightForeArm']
+    #     RightHand = RightForeArm + rotation['RightHand']@offset['RightHand']
+    #     LeftShoulder = spine3 + rotation['LeftShoulder']@offset['LeftShoulder']
+    #     LeftArm = LeftShoulder + rotation['LeftArm']@offset['LeftArm']
+    #     LeftForeArm = LeftArm + rotation['LeftForeArm']@offset['LeftForeArm']
+    #     LeftHand = LeftForeArm + rotation['LeftHand']@offset['LeftHand']
+    #     RightUpLeg = hips + rotation['RightUpLeg']@offset['RightUpLeg']
+    #     RightLeg = RightUpLeg + rotation['RightLeg']@offset['RightLeg']
+    #     RightFoot = RightLeg + rotation['RightFoot']@offset['RightFoot']
+    #     LeftUpLeg = hips + rotation['LeftUpLeg']@offset['LeftUpLeg']
+    #     LeftLeg = LeftUpLeg + rotation['LeftLeg']@offset['LeftLeg']
+    #     LeftFoot = LeftLeg + rotation['LeftFoot']@offset['LeftFoot']
+    #     return torch.cat([hips.T, neck.T, head.T, RightShoulder.T, RightArm.T, RightHand.T, LeftShoulder.T, LeftArm.T,
                           LeftHand.T, RightUpLeg.T, RightLeg.T, RightFoot.T, LeftUpLeg.T, LeftLeg.T, LeftFoot.T], dim=-1)
 
-    def _build_motion(self, offset, traj, index):
-        R = []
-        D = []
-        for i in range(index-31,index):
-            d, r = self._load_transform(offset, traj, i)  # translation and rotation
-            D.append(d)   ### d = 1*3 tensor
-            R.append(r)
-        
-        return torch.stack(R, 0), torch.stack(D, 0)
+    def load_keypoints(self, filepath, ind_frame_in_mocap, length):
+        df = pd.read_csv(filepath, usecols=[1,2,3,4,5,6,7,8,9,10,11,12,19,20,21,22,23,24,25,26,27,34,35,36,37,38,
+                                        39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,121,122,123,
+                                        124,125,126,127,128,129,130,131,132,196,197,198,199,200,201,])
+        step = 4
+        ind_in_csv = (ind_frame_in_mocap-length+1)*step  # [0,4,8,...]
+        keypoints = df.iloc[ind_in_csv:(ind_frame_in_mocap+1)*step:step].values
+        keypoint = np.concatenate([keypoints[...,0:3],keypoints[...,-6:],keypoints[...,45:57],
+                                keypoints[...,33:45],keypoints[...,12:21], keypoints[...,3:12]], axis=-1)
+        # keypoint shape: (length, 51)
+        ## numpy->tensor
+        keypoint = torch.from_numpy(keypoint)
+        offset = torch.zeros([17, length, 3])
+        ### 将root平移到原点处
+        offset[..., 0] = keypoint[..., 0]
+        offset[..., 1] = keypoint[..., 1]
+        offset[..., 2] = keypoint[..., 2]
+        # shape: (length,51)-> 3*(length,17)
+        pos_x = keypoint[...,0:keypoint.shape[-1]:3]
+        pos_y = keypoint[...,1:keypoint.shape[-1]:3]
+        pos_z = keypoint[...,2:keypoint.shape[-1]:3]
+        pos_x = pos_x - offset.permute(1,0,2)[...,0]
+        pos_y = pos_y - offset.permute(1,0,2)[...,1]
+        pos_z = pos_z - offset.permute(1,0,2)[...,2]
+        # shape: (length,17)->(length,17,1)->(length,17,3)->(length,51)
+        keypoint = torch.cat([pos_x.unsqueeze(-1), pos_y.unsqueeze(-1), pos_z.unsqueeze(-1)], dim=-1).reshape(length,-1)
+        ### 将keypoints映射到[-1,1]之间
+        d_max = torch.max(keypoint, dim=-1)[0].unsqueeze(1)
+        # d_max shape: (batch)->(batch, 1)
+        d_min = torch.min(keypoint, dim=-1)[0].unsqueeze(1)
+        # print("d_min shape: ", d_min.shape)
+        dst = d_max - d_min
+        keypoint = ((keypoint - d_min) / dst - 0.5) / 0.5 
+        # shape: (length,51)
+        return keypoint
 
     def __getitem__(self, index):
         ind_bool = [index in i for i in self.data_dict]
@@ -226,9 +254,9 @@ class MoCapDataset(Dataset):
         ### 在提取一个20帧的视频序列时，我们会增加两帧，象征序列的开始和结束
         start_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01_worldpos.csv"
         end_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/1205_take_15_worldpos.csv"
-        start_pose = load_keypoints(start_pose_path, 0, 1)
+        start_pose = self.load_keypoints(start_pose_path, 0, 1)
         # shape: (1,51)
-        end_pose = load_keypoints(end_pose_path, 1000, 1)
+        end_pose = self.load_keypoints(end_pose_path, 1000, 1)
 
         start_motion = torch.zeros(1, 12*10)
         end_motion = torch.ones(1, 12*10)
@@ -241,7 +269,7 @@ class MoCapDataset(Dataset):
             motion_np = feature[ind_frame_in_video-L+2:ind_frame_in_video+2,:]
             motion = torch.from_numpy(motion_np).type(torch.float32).reshape(L, -1)
             # print("motion shape: ", motion.shape)
-            keypoints = load_keypoints(keypoints_path, ind_frame_in_mocap, L)
+            keypoints = self.load_keypoints(keypoints_path, ind_frame_in_mocap, L)
             # print("keypoints_ shape: ", keypoints_.shape)
         label = torch.cat([start_pose, keypoints, end_pose], dim=0)
         motion = torch.cat([start_motion, motion, end_motion], dim=0)
@@ -254,3 +282,11 @@ class MoCapDataset(Dataset):
             temp = i[2] - i[1]
             len += temp
         return len
+    
+
+class EgoMotionDataset(Dataset):
+    def __init__():
+
+    def __len__(self):
+
+    def __getitem__(self):

@@ -45,15 +45,16 @@ def matchKeypoints(kpsA, kpsB, featuresA, featuresB, camera_matrix, ratio=0.75, 
         return None
 
 # max_frames代表取得的连续视频帧数 默认为30
-def poseRecover_1(image_path, frame_in_video, max_frames=30):
+def poseRecover_1(image_path, frame_in_video, image_tmpl, max_frames=30):
     transform = []
-    img_path1 = image_path + "/%05d"%(frame_in_video-max_frames) + ".png"
+    img_path1 = image_path + image_tmpl%(frame_in_video-max_frames)
     imageA = cv2.imread(img_path1)
     kps1, feature1 = detectAndDescribe(imageA)
     if(feature1 is not None):
             feature1 = feature1.astype(np.float32)
     for i in range(frame_in_video-max_frames+1, frame_in_video+1):
-        img_path2 = image_path + "/%05d"%(i) + ".png"
+        # img_path2 = image_path + "/%05d"%(i) + ".png"
+        img_path2 = image_path + image_tmpl%(i)
         # print("img_path2:", img_path2)
         # imageA = cv2.imread(img_path1)
         imageB = cv2.imread(img_path2)
@@ -162,45 +163,47 @@ if __name__=='__main__':
     # print(motion_batch.shape)
     import os
     import yaml
-    fpv_path = "/home/liumin/litianyi/workspace/data/datasets/fpv_frames/"
-    meta_path = "/home/liumin/litianyi/workspace/data/datasets/meta/meta_cross_01.yml"
+    fpv_path = "/home/liumin/litianyi/workspace/data/EgoMotion/lab/"
+    meta_path = "/home/liumin/litianyi/workspace/data/EgoMotion/meta_remy.yml"
     with open(meta_path, 'r') as f:
         config = yaml.load(f.read(),Loader=yaml.FullLoader)
     train_list = config['train']
-    config_path = "/home/liumin/litianyi/workspace/data/datasets/image_num.yml"
+    test_list = config["test"]
+    config_path = "/home/liumin/litianyi/workspace/data/EgoMotion/lab/frame_num.yml"
     with open(config_path, 'r') as f:
         num_config = yaml.load(f.read(),Loader=yaml.FullLoader)
-    dir_image_num = num_config["image_number"]
-    print(dir_image_num)
+    # dir_image_num = num_config["image_number"]
+    # print(dir_image_num)
     dirlist = os.listdir(fpv_path)
     
-    for i in dirlist:
-        if(i[0] == 'r'):
-            continue
-        transform = torch.zeros([1, 12, 10])
-        image_dir = os.path.join(fpv_path, i)
-        print(image_dir)
-        ## 创建文件夹
-        feature_path = "/home/liumin/litianyi/workspace/data/datasets/features"
-        feature_path = os.path.join(feature_path, i)
-        print("feature path: ", feature_path)
-        if  not os.path.exists(feature_path):
-            os.makedirs(feature_path)
-        max_num = dir_image_num[i]
-        for i in range(max_num):
-            # 取第i帧与第i-10帧之间的连续变换参数
-            if i < 10:
-                motion = torch.zeros([1, 12, 10])
-                transform = torch.cat([transform, motion], dim=0)
-            else:
-                try:
-                    motion = poseRecover_1(image_dir, i, max_frames=10)
-                except:
+    for dir in dirlist:
+        # print(sub_dir)
+        for sub_dir in os.listdir(os.path.join(fpv_path, dir)):
+            # 1,2,3,...
+            transform = torch.zeros([1, 12, 10])
+            image_dir = os.path.join(fpv_path, dir, sub_dir)
+            print(image_dir)
+            ## 创建文件夹
+            feature_path = "/home/liumin/litianyi/workspace/data/EgoMotion/features"
+            feature_path = os.path.join(feature_path, dir, "lab", sub_dir)
+            print("feature path: ", feature_path)
+            if not os.path.exists(feature_path):
+                os.makedirs(feature_path)
+            max_num = num_config[dir][sub_dir]
+            for i in range(max_num):
+                # 取第i帧与第i-10帧之间的连续变换参数
+                if i < 10:
                     motion = torch.zeros([1, 12, 10])
-                finally:
                     transform = torch.cat([transform, motion], dim=0)
-        features = transform.numpy()
-        print("features shape: ", features.shape)
-        save_path = os.path.join(feature_path, "feature_10frames.npy")
-        print("save_path: ", save_path)
-        np.save(save_path, features)
+                else:
+                    try:
+                        motion = poseRecover_1(image_dir, i, image_tmpl="/%04d.jpg", max_frames=10)
+                    except:
+                        motion = torch.zeros([1, 12, 10])
+                    finally:
+                        transform = torch.cat([transform, motion], dim=0)
+            features = transform.numpy()
+            print("features shape: ", features.shape)
+            save_path = os.path.join(feature_path, "feature_10frames.npy")
+            print("save_path: ", save_path)
+            np.save(save_path, features)
