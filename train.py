@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import DataLoader
-from ego_pose.data_process import MoCapDataset
+from ego_pose.data_process import MoCapDataset, EgoMotionDataset
 from ego_pose.transforms import *
 from ego_pose.transformer import *
 from ego_pose.loss import *
@@ -29,7 +29,7 @@ def main():
     best_loss = 1e10
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    model = EgoViT(N=args.N, d_model=120, d_ff=args.dff, pose_dim=51, h=args.h, dropout=args.dropout)
+    model = EgoViT(N=args.N, d_model=120, d_ff=args.dff, pose_dim=args.pose_dim, h=args.h, dropout=args.dropout)
     if torch.cuda.device_count() > 1:
         model = nn.DataParallel(model, device_ids=args.gpus).cuda()
     else:
@@ -55,32 +55,59 @@ def main():
         else:
             print(("=> no checkpoint found at '{}'".format(args.resume)))
 
-    train_data = MoCapDataset(dataset_path=args.dataset_path, 
-                              config_path=args.config_path, 
-                              image_tmpl="{:05d}.png", 
-                              image_transform=torchvision.transforms.Compose([
-                                        Scale(256),
-                                        ToTorchFormatTensor(),
-                                        GroupNormalize(
-                                            mean=[.485, .456, .406],
-                                            std=[.229, .224, .225])
-                                        ]), 
-                               L=args.L,
-                               test_mode=False)
+    ### Yuan Ye
+    if args.dataset == 'Yuan':
+        train_data = MoCapDataset(dataset_path=args.dataset_path, 
+                                config_path=args.config_path, 
+                                image_tmpl="{:05d}.png", 
+                                image_transform=torchvision.transforms.Compose([
+                                            Scale(256),
+                                            ToTorchFormatTensor(),
+                                            GroupNormalize(
+                                                mean=[.485, .456, .406],
+                                                std=[.229, .224, .225])
+                                            ]), 
+                                L=args.L,
+                                test_mode=False)
 
-    val_data = MoCapDataset(dataset_path=args.dataset_path, 
-                              config_path=args.config_path, 
-                              image_tmpl="{:05d}.png", 
-                              image_transform=torchvision.transforms.Compose([
-                                        Scale(256),
-                                        ToTorchFormatTensor(),
-                                        GroupNormalize(
-                                            mean=[.485, .456, .406],
-                                            std=[.229, .224, .225])
-                                        ]), 
-                              L=args.L,
-                              test_mode=False)
+        val_data = MoCapDataset(dataset_path=args.dataset_path, 
+                                config_path=args.config_path, 
+                                image_tmpl="{:05d}.png", 
+                                image_transform=torchvision.transforms.Compose([
+                                            Scale(256),
+                                            ToTorchFormatTensor(),
+                                            GroupNormalize(
+                                                mean=[.485, .456, .406],
+                                                std=[.229, .224, .225])
+                                            ]), 
+                                L=args.L,
+                                test_mode=False)
 
+    if args.dataset == 'EgoMotion':
+        train_data = EgoMotionDataset(dataset_path=args.dataset_path, 
+                                    config_path=args.config_path, 
+                                    image_tmpl="{:04d}.jpg", 
+                                    image_transform=torchvision.transforms.Compose([
+                                                Scale(256),
+                                                ToTorchFormatTensor(),
+                                                GroupNormalize(
+                                                mean=[.485, .456, .406],
+                                                std=[.229, .224, .225])
+                                            ]), 
+                                    L=args.L,
+                                    test_mode=False)
+        val_data = EgoMotionDataset(dataset_path=args.dataset_path, 
+                                    config_path=args.config_path, 
+                                    image_tmpl="{:04d}.jpg", 
+                                    image_transform=torchvision.transforms.Compose([
+                                            Scale(256),
+                                            ToTorchFormatTensor(),
+                                            GroupNormalize(
+                                                mean=[.485, .456, .406],
+                                                std=[.229, .224, .225])
+                                            ]), 
+                                    L=args.L,
+                                    test_mode=False)
     train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, 
                               shuffle=True,num_workers=args.workers, pin_memory=True)
     val_loader = DataLoader(dataset=val_data, batch_size=args.batch_size, 

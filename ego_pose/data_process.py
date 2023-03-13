@@ -300,15 +300,16 @@ class EgoMotionDataset(Dataset):
         self.mocap_fr = mocap_fr
         self.image_tmpl = image_tmpl
         self.transform = image_transform
+        self.scene = scene
         self.length = L
         self.data_dict = []
         self.dir_name = []   # "02_01_walk/1"
         len = 0
         for i in self.data_list:  # 02_01_walk
-            for j in self.video_frames[i][scene]: # 1,2,...,6
-                self.dir_name.append(i+'_'+j)
-                self.data_dict.append(range(len, len + min(self.video_frames[i][scene][j]+1, self.mocap_frames[i])))
-                len += min(self.video_frames[i][scene][j]+1, self.mocap_frames[i])
+            for j in self.video_frames[i][self.scene]: # 1,2,...,6
+                self.dir_name.append(i+'_'+str(j))
+                self.data_dict.append(range(len, len + min(self.video_frames[i][self.scene][j]+1, self.mocap_frames[i])))
+                len += min(self.video_frames[i][self.scene][j]+1, self.mocap_frames[i])
 
     def load_keypoints(self, filepath, ind_frame, length):
         df = pd.read_csv(filepath,usecols=[1,2,3,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,
