@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import DataLoader
-from ego_pose.data_process import MoCapDataset
+from ego_pose.data_process import MoCapDataset, EgoMotionDataset
 from ego_pose.transforms import *
 from ego_pose.transformer import *
 from ego_pose.loss import *
@@ -25,25 +25,40 @@ def inference(model, src, src_mask):
         )
     return ys
          
-exp_name = 'train18'
+exp_name = 'train19'
 length = 20
 path = os.getcwd()
 save_path = os.path.join(path, 'results', exp_name)
 if not os.path.exists(save_path):
     os.makedirs(save_path) 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-Model = EgoViT(N=16, d_model=120, d_ff=1440, pose_dim=51, h=10, dropout=0.1)
-dataset_path = '/home/liumin/litianyi/workspace/data/datasets'
-config_path = '/home/liumin/litianyi/workspace/data/datasets/meta/meta_subject_01.yml'
+Model = EgoViT(N=16, d_model=120, d_ff=1440, pose_dim=48, h=10, dropout=0.1)
+dataset_path = '/home/liumin/litianyi/workspace/data/EgoMotion'
+config_path = '/home/liumin/litianyi/workspace/data/EgoMotion/meta_remy.yml'
 ### load checkpoints if exist
 
-resume = 'logs/train18/transformer_model_best.pth.tar'
+resume = 'logs/train19/transformer_model_best.pth.tar'
 checkpoint = torch.load(resume)
-Model.load_state_dict(checkpoint['state_dict'])
+# Model.load_state_dict(checkpoint['state_dict'])
 # model = nn.DataParallel(model, device_ids=[0,1]).cuda()
+# 多GPU
 Model.load_state_dict({k.replace('module.',''):v for k,v in torch.load(resume)['state_dict'].items()})   
 Model = Model.to(device)
-val_data = MoCapDataset(dataset_path=dataset_path, 
+
+# val_data = MoCapDataset(dataset_path=dataset_path, 
+#                               config_path=config_path, 
+#                               image_tmpl="{:05d}.png", 
+#                               image_transform=torchvision.transforms.Compose([
+#                                         Scale(256),
+#                                         ToTorchFormatTensor(),
+#                                         GroupNormalize(
+#                                             mean=[.485, .456, .406],
+#                                             std=[.229, .224, .225])
+#                                         ]), 
+#                               L=length,
+#                               test_mode=True)
+
+val_data = EgoMotionDataset(dataset_path=dataset_path, 
                               config_path=config_path, 
                               image_tmpl="{:05d}.png", 
                               image_transform=torchvision.transforms.Compose([
@@ -57,7 +72,7 @@ val_data = MoCapDataset(dataset_path=dataset_path,
                               test_mode=True)
 
 val_loader = DataLoader(dataset=val_data, batch_size=1, 
-                        shuffle=True, num_workers=1, pin_memory=True)
+                        shuffle=True, num_workers=8, pin_memory=True)
 # keypoints_intro = torch.tensor(np.load("/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01.npy")).to(device)
 # keypoints_intro = torch.cat((keypoints_intro[:, 6:15], keypoints_intro[:, 18:27], keypoints_intro[:, 30:]), dim=-1)
 # print(keypoints_intro.shape)
@@ -68,11 +83,18 @@ val_loader = DataLoader(dataset=val_data, batch_size=1,
 # dst = d_max - d_min
 # keypoints_intro = ((keypoints_intro - d_min) / dst - 0.5) / 0.5
 Model.eval()
-start_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01_worldpos.csv"
-end_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/1205_take_15_worldpos.csv"
-start_pose = load_keypoints(start_pose_path, 0, 1)
-# shape: (1,51)
-end_pose = load_keypoints(end_pose_path, 1000, 1)
+# start_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01_worldpos.csv"
+# end_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/1205_take_15_worldpos.csv"
+# start_pose = load_keypoints(start_pose_path, 0, 1)
+# # shape: (1,51)
+# end_pose = load_keypoints(end_pose_path, 1000, 1)
+
+################# 
+start_pose_path = "/home/liumin/litianyi/workspace/data/EgoMotion/keypoints/02_01_worldpos.csv"
+end_pose_path = "/home/liumin/litianyi/workspace/data/EgoMotion/keypoints/143_19_worldpos.csv"
+start_pose = val_data.load_keypoints(start_pose_path, 0, 1)
+# shape: (1,48)
+end_pose = val_data.load_keypoints(end_pose_path, 50, 1)
 
 for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
     label = label.to(device)
@@ -115,5 +137,5 @@ for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
         # head1 = ys[:, j, 0:3]
         # head2 = ys[:, j, 3:6]
         label_ = label[:, j, :]
-        DrawSkeleton(label_.squeeze(0)[:], head1=None, head2=None, image_name=label_path)
-        DrawSkeleton(keypoint[0], head1=None, head2=None, image_name=image_path)
+        DrawSkeleton(label_.squeeze(0)[:], head1=None, head2=None, image_name=label_path, dataset='EgoMotion')
+        DrawSkeleton(keypoint[0], head1=None, head2=None, image_name=image_path, dataset='EgoMotion')

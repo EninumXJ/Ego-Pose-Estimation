@@ -187,6 +187,11 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
         output = model(src, tgt, src_mask, tgt_mask)
         # output shape:(batch,length,pose_dim)
         loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz')
+        if torch.isnan(loss).any():
+            print("src: ", src)
+            print("tgt: ", tgt)
+            print("output: ", output)
+            print("index: ", i)
         losses.update(loss.item(), label.shape[0])
         # optimizer.zero_grad()
         loss.backward()
@@ -204,7 +209,7 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
         if i % args.print_freq == 0:
             logger.info("lr: {:.5f} \tBatch({:>3}/{:>3}) done. Loss: {:.4f}".format(optimizer.param_groups[0]['lr'], i+1, max_iter, loss.data.item()))
 
-        # if i > max_iter:
+        # if i > 2:
         #     break
         # if i % args.print_freq == 0:
         #     print(('Epoch: [{0}][{1}/{2}], lr: {lr:.5f}\t'
@@ -241,22 +246,8 @@ def validate(val_loader, model, device, batch_num=None, logger=None, args=None):
             tgt_mask = tgt_mask & mask_
             # tgt_mask shape:(batch,length,length)
             output = model(src, tgt, src_mask, tgt_mask)
-            # output shape:(batch,length,pose_dim)label = label.to(device)
-            tgt = label
-            src = motion.to(device)
-            # src shape:(batch,length,feature_dim)
-            src_mask = (src.sum(axis=-1) != 0).squeeze(-1).unsqueeze(-2)
-            # src_mask shape:(batch,1,length)
-            tgt_mask = (tgt.sum(axis=-1) != 0).squeeze(-1).unsqueeze(-2)
-            # tgt_mask shape:(batch,1,length)
-            mask_ = torch.tensor(subsequent_mask(tgt.size(-2)).type_as(tgt_mask.data))
-            # mask_ shape:(1,length,length)
-            tgt_mask = tgt_mask & mask_
-            # tgt_mask shape:(batch,length,length)
-            output = model(src, tgt, src_mask, tgt_mask)
-            # output shape:(batch,length,pose_dim)
-            
-            loss = ComputeLoss_nohead(output, label, args.L, order='xyz')
+            # output shape:(batch,length,pose_dim)label = label.to(device)     
+            loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz')
             losses.update(loss.item(), label.shape[0])
 
             # measure elapsed time

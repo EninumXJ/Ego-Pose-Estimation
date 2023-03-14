@@ -317,14 +317,20 @@ class EgoMotionDataset(Dataset):
                                    82,83,84,85,86,87,88,89,90,100,101,102,103,104,105,106,107,108])
         step = 4    # mocap_fr=120, video_fr=30!
         ind_in_csv = (ind_frame-length+1)*step  # [0,4,8,...]
+        # print("ind_in_csv: ", (ind_frame-length+1)*step)
         keypoints = df.iloc[ind_in_csv:(ind_frame+1)*step:step].values
         #(hips,spine1,neck1,head,rightarm,rightforearm,righthand,leftarm,leftforearm,
         # lefthand,rightupleg,rigthleg,rightfoot,leftupleg,leftleg,leftfoot)
-        keypoint = np.concatenate([keypoints[0:3],keypoints[6:9],keypoints[33:39],keypoints[12:21],
-                           keypoints[24:33],keypoints[39:48], keypoints[48:57]])
+        keypoint = np.concatenate([keypoints[:,0:3],keypoints[:,6:9],keypoints[:,33:39],keypoints[:,12:21],
+                           keypoints[:,24:33],keypoints[:,39:48], keypoints[:,48:57]], axis=1)
         # keypoint shape: (length, 48)
         ## numpy->tensor
         keypoint = torch.from_numpy(keypoint)
+        if keypoint.shape[0] > 1 and keypoint.shape[0] < length:
+            # print("keypoint shape: ", keypoint.shape)
+            zero = torch.zeros(1, 48)
+            keypoint = torch.cat([keypoint, zero], dim=0)
+            # print("keypoint shape: ", keypoint.shape)
         offset = torch.zeros([16, length, 3])
          ### 将root平移到原点处
         offset[..., 0] = keypoint[..., 0]
@@ -345,7 +351,7 @@ class EgoMotionDataset(Dataset):
         d_min = torch.min(keypoint, dim=-1)[0].unsqueeze(1)
         # print("d_min shape: ", d_min.shape)
         dst = d_max - d_min
-        keypoint = ((keypoint - d_min) / dst - 0.5) / 0.5 
+        keypoint = ((keypoint - d_min) / (dst+0.00001) - 0.5) / 0.5 
         # shape: (length,48)
         return keypoint
 
@@ -358,24 +364,30 @@ class EgoMotionDataset(Dataset):
         ind_frame = index - self.data_dict[ind][0]
 
         dir = self.dir_name[ind][:-2]
-        print("dir: ", dir)
+        # print("dir: ", dir)
         sub_dir = self.dir_name[ind][-1]
-        print("sub_dir: ", sub_dir)
+        # print(dir, sub_dir)
         feature_path = os.path.join(self.dataset_path, "features", dir, self.scene, sub_dir, "feature_10frames.npy")
-        keypoints_path = os.path.join(self.dataset_path, "keypoints", dir+"_worldpos.csv")
+        # 获取文件夹的数字前缀：91_09_drunk_walk->91_09
+        if dir[2] == '_':
+            front_num = dir[0:5]
+        else:
+            front_num = dir[0:6]
+        keypoints_path = os.path.join(self.dataset_path, "keypoints", front_num+"_worldpos.csv")
         feature = np.load(feature_path)
-        print("feature shape: ", feature.shape)
+        # print("feature shape: ", feature.shape)
         L = self.length 
 
         ################# 
-        start_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/0213_take_01_worldpos.csv"
-        end_pose_path = "/home/liumin/litianyi/workspace/data/datasets/keypoints/1205_take_15_worldpos.csv"
+        start_pose_path = "/home/liumin/litianyi/workspace/data/EgoMotion/keypoints/02_01_worldpos.csv"
+        end_pose_path = "/home/liumin/litianyi/workspace/data/EgoMotion/keypoints/143_19_worldpos.csv"
         start_pose = self.load_keypoints(start_pose_path, 0, 1)
         # shape: (1,48)
-        end_pose = self.load_keypoints(end_pose_path, 1000, 1)
+        end_pose = self.load_keypoints(end_pose_path, 50, 1)
 
         start_motion = torch.zeros(1, 12*10)
         end_motion = torch.ones(1, 12*10)
+        
         if(ind_frame-L+2 < 0):
             motion = torch.zeros(L, 12*10)
             keypoints = torch.zeros(L, 48)
@@ -383,7 +395,7 @@ class EgoMotionDataset(Dataset):
             motion_np = feature[ind_frame-L+2:ind_frame+2,:]
             motion = torch.from_numpy(motion_np).type(torch.float32).reshape(L, -1)
             # print("motion shape: ", motion.shape)
-            keypoints = self.load_keypoints(keypoints_path, ind_frame, L)
+            keypoints = self.load_keypoints(keypoints_path, ind_frame+1, L)
             # print("keypoints_ shape: ", keypoints_.shape)
         label = torch.cat([start_pose, keypoints, end_pose], dim=0)
         motion = torch.cat([start_motion, motion, end_motion], dim=0)
