@@ -5,6 +5,7 @@ parser.add_argument('--config_path', type=str, help='path to your config')
 parser.add_argument('--exp_name', type=str, help='path to save models')
 parser.add_argument('--dataset', type=str, choices=['Yuan','EgoMotion'])
 # ========================= Model Configs ==========================
+parser.add_argument('--no_feature', action='store_true')
 parser.add_argument('--dropout', '--do', default=0.5, type=float,
                     metavar='DO', help='dropout ratio (default: 0.5)')
 parser.add_argument('--loss_type', type=str, default="nll",

@@ -285,7 +285,7 @@ class MoCapDataset(Dataset):
     
 
 class EgoMotionDataset(Dataset):
-    def __init__(self, dataset_path, config_path, image_tmpl, image_transform=None, mocap_fr=30, L=20, test_mode=False, scene='lab'):
+    def __init__(self, dataset_path, config_path, no_feature, image_tmpl, image_transform=None, mocap_fr=30, L=20, test_mode=False, scene='lab'):
         with open(config_path, 'r') as f:
             config = yaml.load(f.read(), Loader=yaml.FullLoader)
         self.dataset_path = dataset_path
@@ -304,12 +304,16 @@ class EgoMotionDataset(Dataset):
         self.length = L
         self.data_dict = []
         self.dir_name = []   # "02_01_walk/1"
+        self.no_feature = no_feature
         len = 0
         for i in self.data_list:  # 02_01_walk
             for j in self.video_frames[i][self.scene]: # 1,2,...,6
                 self.dir_name.append(i+'_'+str(j))
                 self.data_dict.append(range(len, len + min(self.video_frames[i][self.scene][j]+1, self.mocap_frames[i])))
                 len += min(self.video_frames[i][self.scene][j]+1, self.mocap_frames[i])
+    
+    def _load_image(self, directory, idx):
+        return Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('RGB')
 
     def load_keypoints(self, filepath, ind_frame, length):
         df = pd.read_csv(filepath,usecols=[1,2,3,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,
@@ -362,11 +366,11 @@ class EgoMotionDataset(Dataset):
         ind_bool = [index in i for i in self.data_dict]
         ind = ind_bool.index(True)  # ind表示该index属于第ind个视频
         ind_frame = index - self.data_dict[ind][0]
-
         dir = self.dir_name[ind][:-2]
-        # print("dir: ", dir)
+        print("dir: ", dir)
         sub_dir = self.dir_name[ind][-1]
-        # print(dir, sub_dir)
+        print(dir, sub_dir)
+        print("ind_frame: ", ind_frame)
         feature_path = os.path.join(self.dataset_path, "features", dir, self.scene, sub_dir, "feature_10frames.npy")
         # 获取文件夹的数字前缀：91_09_drunk_walk->91_09
         if dir[2] == '_':
@@ -374,8 +378,6 @@ class EgoMotionDataset(Dataset):
         else:
             front_num = dir[0:6]
         keypoints_path = os.path.join(self.dataset_path, "keypoints", front_num+"_worldpos.csv")
-        feature = np.load(feature_path)
-        # print("feature shape: ", feature.shape)
         L = self.length 
 
         ################# 
@@ -387,20 +389,39 @@ class EgoMotionDataset(Dataset):
 
         start_motion = torch.zeros(1, 12*10)
         end_motion = torch.ones(1, 12*10)
-        
-        if(ind_frame-L+2 < 0):
-            motion = torch.zeros(L, 12*10)
-            keypoints = torch.zeros(L, 48)
+        if not self.no_feature:
+            feature = np.load(feature_path)
+            # print("feature shape: ", feature.shape)
+            if(ind_frame-L+2 < 0):
+                motion = torch.zeros(L, 12*10)
+                keypoints = torch.zeros(L, 48)
+            else:
+                motion_np = feature[ind_frame-L+2:ind_frame+2,:]
+                motion = torch.from_numpy(motion_np).type(torch.float32).reshape(L, -1)
+                # print("motion shape: ", motion.shape)
+                keypoints = self.load_keypoints(keypoints_path, ind_frame+1, L)
+                # print("keypoints_ shape: ", keypoints_.shape)
+            label = torch.cat([start_pose, keypoints, end_pose], dim=0)
+            motion = torch.cat([start_motion, motion, end_motion], dim=0)
+            # print("label shape: ", label.shape)
+            return motion, label
         else:
-            motion_np = feature[ind_frame-L+2:ind_frame+2,:]
-            motion = torch.from_numpy(motion_np).type(torch.float32).reshape(L, -1)
-            # print("motion shape: ", motion.shape)
-            keypoints = self.load_keypoints(keypoints_path, ind_frame+1, L)
-            # print("keypoints_ shape: ", keypoints_.shape)
-        label = torch.cat([start_pose, keypoints, end_pose], dim=0)
-        motion = torch.cat([start_motion, motion, end_motion], dim=0)
-        # print("label shape: ", label.shape)
-        return motion, label
+            if(ind_frame-L+2 < 0):
+                keypoints = torch.zeros(L, 48)
+            else:
+                keypoints = self.load_keypoints(keypoints_path, ind_frame+1, L)
+            label = torch.cat([start_pose, keypoints, end_pose], dim=0)
+            image = torch.zeros(1, 3, 224, 224)
+            for i in range(ind_frame-L+1, ind_frame+1):
+                if i < 0:
+                    image_ = torch.zeros(1, 3, 224, 224)
+                else:
+                    image_dir = os.path.join(self.dataset_path, self.scene, dir, sub_dir)
+                    image_ = self.transform(self._load_image(image_dir, i)).unsqueeze(0)
+                    # print("image_ shape: ", image_.shape)
+                image = torch.cat([image, image_], dim=0)
+            return image[1:,...], label
+
 
 if __name__=='__main__':
     config_path = '/home/liumin/litianyi/workspace/data/EgoMotion/meta_remy.yml'

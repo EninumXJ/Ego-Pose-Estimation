@@ -12,23 +12,64 @@ from torch.nn.utils import clip_grad_norm
 import os
 import time
 from tqdm import tqdm
-from utils.visualize import DrawSkeleton45, DrawSkeleton
+from utils.visualize import *
 from utils.compute_keypoints import load_keypoints
 
-def inference(model, src, src_mask):
-    memory = model.model.encode(src, src_mask)
-    ys = torch.zeros(1,1).type_as(src)
-    L = 20  # 序列长度
-    for i in range(L-1):
-         out = model.model.decode(
+def inference(label, motion, Model, length, start_pose, end_pose, device, index):
+    label = label.unsqueeze(0).to(device)
+    tgt = label
+    src = motion.unsqueeze(0).to(device)
+    # src shape:(batch,length,feature_dim)
+    src_mask = (src.sum(axis=-1) != 0).squeeze(-1).unsqueeze(-2)
+    # src_mask shape:(batch,1,length)
+    tgt_mask = (tgt.sum(axis=-1) != 0).squeeze(-1).unsqueeze(-2)
+    # tgt_mask shape:(batch,1,length)
+    mask_ = torch.tensor(subsequent_mask(tgt.size(-2)).type_as(tgt_mask.data))
+    # mask_ shape:(1,length,length)
+    tgt_mask = tgt_mask & mask_
+
+    # tgt_mask shape:(batch,length,length)
+    # output = model(src, tgt, src_mask, tgt_mask)
+    # output shape:(batch,length,pose_dim)label = label.to(device)
+    memory = Model.model.encode(src, src_mask)
+    # memory shape: (batch, length, feature_dim)
+    ys = start_pose.unsqueeze(1).to(device)
+    
+    for k in range(length - 1):
+        out = Model.model.decode(
             memory, src_mask, ys, subsequent_mask(ys.size(1)).type_as(src.data)
         )
-    return ys
-         
+        pose = Model.model.generator(out[:, -1]).unsqueeze(0)
+        # pose shape: (1, pose_dim)->(1, 1, pose_dim)
+        ys = torch.cat([ys, pose], dim=1)
+    # ys shape: (1, length, pose_dim)
+    # label = torch.cat((label[..., 0:9], label[..., 12:21], label[..., 24:]), dim=-1)
+    ys = ys.squeeze(0).cpu().detach().numpy()
+    label = label.squeeze(0)[1:-1].cpu().detach().numpy()
+    print("label shape: ", label.shape)
+    image_name = "Skeleton"+'_'+str(index)
+    image_path = os.path.join(save_path, image_name)
+    label_name = "Label"+'_'+str(index)
+    label_path = os.path.join(save_path, label_name)
+    PlotLPose2D(label, length, image_name=label_path, gt_flag=True)
+    PlotLPose2D(ys, length, image_name=image_path, gt_flag=False)
+    # for j in range(ys.shape[1]):
+    #     image_name = 'Skeleton'+'_'+str(index)+'_'+str(j)+'.jpg'
+    #     image_path = os.path.join(save_path, image_name)
+    #     label_name = 'Label'+'_'+str(index)+'_'+str(j)+'.jpg'
+    #     label_path = os.path.join(save_path, label_name)
+    #     keypoint = ys[:, j, :]
+    #     # head1 = ys[:, j, 0:3]
+    #     # head2 = ys[:, j, 3:6]
+    #     label_ = label[:, j, :]
+    #     DrawSkeleton(label_.squeeze(0)[:], head1=None, head2=None, image_name=label_path, dataset='EgoMotion')
+    #     DrawSkeleton(keypoint[0], head1=None, head2=None, image_name=image_path, dataset='EgoMotion')
+
+index = 12350
 exp_name = 'train19'
 length = 20
 path = os.getcwd()
-save_path = os.path.join(path, 'results', exp_name)
+save_path = os.path.join(path, 'results', exp_name, "index_"+str(index))
 if not os.path.exists(save_path):
     os.makedirs(save_path) 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -61,6 +102,7 @@ Model = Model.to(device)
 val_data = EgoMotionDataset(dataset_path=dataset_path, 
                               config_path=config_path, 
                               image_tmpl="{:05d}.png", 
+                              no_feature=False,
                               image_transform=torchvision.transforms.Compose([
                                         Scale(256),
                                         ToTorchFormatTensor(),
@@ -95,7 +137,14 @@ end_pose_path = "/home/liumin/litianyi/workspace/data/EgoMotion/keypoints/143_19
 start_pose = val_data.load_keypoints(start_pose_path, 0, 1)
 # shape: (1,48)
 end_pose = val_data.load_keypoints(end_pose_path, 50, 1)
+### 不使用DataLoader而是直接根据索引读取数据
+motion = val_data[index][0]
+print("motion shape: ", motion.shape)
+label = val_data[index][1]
+print("label shape: ", label.shape)
+inference(label, motion, Model, length, start_pose, end_pose, device, index)
 
+'''
 for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
     label = label.to(device)
     tgt = label
@@ -139,3 +188,6 @@ for i, (motion, label) in tqdm(enumerate(val_loader), total=10):
         label_ = label[:, j, :]
         DrawSkeleton(label_.squeeze(0)[:], head1=None, head2=None, image_name=label_path, dataset='EgoMotion')
         DrawSkeleton(keypoint[0], head1=None, head2=None, image_name=image_path, dataset='EgoMotion')
+'''
+
+

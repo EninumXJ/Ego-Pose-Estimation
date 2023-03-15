@@ -51,7 +51,7 @@ def poseRecover_1(image_path, frame_in_video, image_tmpl, max_frames=30):
     imageA = cv2.imread(img_path1)
     kps1, feature1 = detectAndDescribe(imageA)
     if(feature1 is not None):
-            feature1 = feature1.astype(np.float32)
+        feature1 = feature1.astype(np.float32)
     for i in range(frame_in_video-max_frames+1, frame_in_video+1):
         # img_path2 = image_path + "/%05d"%(i) + ".png"
         img_path2 = image_path + image_tmpl%(i)
@@ -95,7 +95,7 @@ def poseRecover_1(image_path, frame_in_video, image_tmpl, max_frames=30):
     # print("transform shape:", transform.shape)
 
 # max_frames代表取得的连续视频帧数 默认为30
-def poseRecover_2(image_path, frame_in_video, max_frames=30):
+def poseRecover_2(image_path, frame_in_video, image_tmpl, max_frames=30):
     transform = []
     # img_path1 = image_path + "/%05d"%(frame_in_video-max_frames-1) + ".png"
     # imageA = cv2.imread(img_path1)
@@ -103,9 +103,9 @@ def poseRecover_2(image_path, frame_in_video, max_frames=30):
     # if(feature1 is not None):
     #         feature1 = feature1.astype(np.float32)
     for i in range(frame_in_video-max_frames+1, frame_in_video+1):
-        img_path1 = image_path + "/%05d"%(i-1) + ".png"
+        img_path1 = image_path + image_tmpl%(i-1)
         imageA = cv2.imread(img_path1)
-        img_path2 = image_path + "/%05d"%(i) + ".png"
+        img_path2 = image_path + image_tmpl%(i)
         imageB = cv2.imread(img_path2)
         W = imageA.shape[1]
         kps1, feature1 = detectAndDescribe(imageA)
@@ -136,10 +136,10 @@ def poseRecover_2(image_path, frame_in_video, max_frames=30):
         else:
             R = np.zeros((1, 9))
             t = np.zeros((1, 3))
-        # g_hat = np.zeros((1, 1))
-        # g_hat[0, 0] = 0.3*(1-0.5)
-        # transform_ = np.concatenate((R, t, g_hat), axis=1)
-        transform_ = np.concatenate((R, t), axis=1)*100
+        g_hat = np.zeros((1, 1))
+        g_hat[0, 0] = 0.3*(1-0.5)
+        transform_ = np.concatenate((R, t, g_hat), axis=1)
+        # transform_ = np.concatenate((R, t), axis=1)*100
         transform.append(transform_)
     transform = np.array(transform)
     transform = torch.from_numpy(transform).permute(1,2,0).float()
@@ -180,7 +180,7 @@ if __name__=='__main__':
         # print(sub_dir)
         for sub_dir in os.listdir(os.path.join(fpv_path, dir)):
             # 1,2,3,...
-            transform = torch.zeros([1, 12, 10])
+            transform = torch.zeros([1, 13, 1])
             image_dir = os.path.join(fpv_path, dir, sub_dir)
             print(image_dir)
             ## 创建文件夹
@@ -191,19 +191,19 @@ if __name__=='__main__':
                 os.makedirs(feature_path)
             max_num = num_config[dir][sub_dir]
             for i in range(max_num):
-                # 取第i帧与第i-10帧之间的连续变换参数
-                if i < 10:
-                    motion = torch.zeros([1, 12, 10])
+                # 取第i帧与第i-1帧之间的连续变换参数
+                if i == 0:
+                    motion = torch.zeros([1, 13, 1])
                     transform = torch.cat([transform, motion], dim=0)
                 else:
                     try:
-                        motion = poseRecover_1(image_dir, i, image_tmpl="/%04d.jpg", max_frames=10)
+                        motion = poseRecover_2(image_dir, i, image_tmpl="/%04d.jpg", max_frames=1)
                     except:
-                        motion = torch.zeros([1, 12, 10])
+                        motion = torch.zeros([1, 13, 1])       
                     finally:
                         transform = torch.cat([transform, motion], dim=0)
-            features = transform.numpy()
+            features = transform.squeeze(-1).numpy()
             print("features shape: ", features.shape)
-            save_path = os.path.join(feature_path, "feature_10frames.npy")
+            save_path = os.path.join(feature_path, "feature_01frames.npy")
             print("save_path: ", save_path)
             np.save(save_path, features)

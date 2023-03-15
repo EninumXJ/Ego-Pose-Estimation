@@ -6,12 +6,13 @@ CONFIG_PATH=/home/liumin/litianyi/workspace/data/EgoMotion/meta_remy.yml
 CUDA_VISIBLE_DEVICES=0,1 python train.py \
     --dataset_path $DATA_DIR \
     --config_path $CONFIG_PATH \
-    --exp_name train20 \
+    --exp_name train21 \
     --dataset EgoMotion \
+    --no_feature \
     --epochs 50 \
     --lr 0.1 \
     --batch_size 32 \
-    --snapshot_pref transformer \
+    --snapshot_pref transformer_resnet \
     --gpus 0 1 \
     --eval-freq=1 \
     --clip-gradient=30 \
