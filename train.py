@@ -159,9 +159,10 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
         motion_input = motion.to(device)
         
         keypoint, head1, head2 = model(foreground, motion_input)
-        
+      
         # loss = ComputeLoss(keypoint, head1, head2, label)
         loss = ComputeLoss_nohead(keypoint, label)
+        # print("loss: ", loss)
         losses.update(loss.item(), image.shape[0])
         # optimizer.zero_grad()
         loss.backward()

@@ -374,7 +374,7 @@ class EgoMotionDataset(Dataset):
             motion_np = feature[ind_frame-30:ind_frame+1,:]
         motion = torch.from_numpy(motion_np).type(torch.float32).unsqueeze(0).permute(0,2,1)
         # print("motion shape: ", motion.shape)
-        keypoints = self.load_keypoints(keypoints_path, ind_frame, 1)
+        keypoints = self.load_keypoints(keypoints_path, ind_frame, 1).type(torch.float32)
         # print("keypoints_ shape: ", keypoints_.shape)
         label = keypoints
         # print("label shape: ", label.shape)
