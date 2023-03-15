@@ -3,13 +3,14 @@ import yaml
 from torch.utils.data import Dataset
 import torch
 from PIL import Image
-from mocap.pose import load_bvh_file, interpolated_traj
 from bvh import Bvh
 import pickle
 import math
 import numpy as np
 import torch.nn.functional as F
-from ego_pose.camera_pose_recover import *
+import pandas as pd
+# from ego_pose.camera_pose_recover import *
+# from mocap.pose import load_bvh_file, interpolated_traj
 
 subject_config = "meta_subject_01.yaml"
 
@@ -265,3 +266,199 @@ class MoCapDataset(Dataset):
             temp = i[2] - i[1]
             len += temp
         return len
+    
+
+class EgoMotionDataset(Dataset):
+    def __init__(self, dataset_path, config_path, image_tmpl, image_transform=None, mocap_fr=30, L=20, test_mode=False, scene='lab'):
+        with open(config_path, 'r') as f:
+            config = yaml.load(f.read(), Loader=yaml.FullLoader)
+        self.dataset_path = dataset_path
+        self.test_mode = test_mode
+        if self.test_mode == False:
+            self.data_list = config['train']
+        else:
+            self.data_list = config['test']
+           
+        self.mocap_frames = config['mocap_frames']
+        self.video_frames = config['video_frames']
+        self.mocap_fr = mocap_fr
+        self.image_tmpl = image_tmpl
+        self.transform = image_transform
+        self.scene = scene
+        self.length = L
+        self.data_dict = []
+        self.dir_name = []   # "02_01_walk/1"
+        len = 0
+        for i in self.data_list:  # 02_01_walk
+            for j in self.video_frames[i][self.scene]: # 1,2,...,6
+                self.dir_name.append(i+'_'+str(j))
+                self.data_dict.append(range(len, len + min(self.video_frames[i][self.scene][j]+1, self.mocap_frames[i])))
+                len += min(self.video_frames[i][self.scene][j]+1, self.mocap_frames[i])
+
+    def _load_image(self, directory, idx):
+        return Image.open(os.path.join(directory, self.image_tmpl.format(idx))).convert('RGB')
+    
+    def load_keypoints(self, filepath, ind_frame, length):
+        df = pd.read_csv(filepath,usecols=[1,2,3,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,
+                                   40,41,42,43,44,45,46,47,48,49,50,51,70,71,72,73,74,75,
+                                   82,83,84,85,86,87,88,89,90,100,101,102,103,104,105,106,107,108])
+        step = 4    # mocap_fr=120, video_fr=30!
+        ind_in_csv = (ind_frame-length+1)*step  # [0,4,8,...]
+        # print("ind_in_csv: ", (ind_frame-length+1)*step)
+        keypoints = df.iloc[ind_in_csv:(ind_frame+1)*step:step].values
+        #(hips,spine1,neck1,head,rightarm,rightforearm,righthand,leftarm,leftforearm,
+        # lefthand,rightupleg,rigthleg,rightfoot,leftupleg,leftleg,leftfoot)
+        keypoint = np.concatenate([keypoints[:,0:3],keypoints[:,6:9],keypoints[:,33:39],keypoints[:,12:21],
+                           keypoints[:,24:33],keypoints[:,39:48], keypoints[:,48:57]], axis=1)
+        # keypoint shape: (length, 48)
+        ## numpy->tensor
+        keypoint = torch.from_numpy(keypoint)
+        if keypoint.shape[0] > 1 and keypoint.shape[0] < length:
+            # print("keypoint shape: ", keypoint.shape)
+            zero = torch.zeros(1, 48)
+            keypoint = torch.cat([keypoint, zero], dim=0)
+            # print("keypoint shape: ", keypoint.shape)
+        offset = torch.zeros([16, length, 3])
+         ### 将root平移到原点处 
+        offset[..., 0] = keypoint[..., 0]
+        offset[..., 1] = keypoint[..., 1]
+        offset[..., 2] = keypoint[..., 2]
+        # shape: (length,48)-> 3*(length,16)
+        pos_x = keypoint[...,0:keypoint.shape[-1]:3]
+        pos_y = keypoint[...,1:keypoint.shape[-1]:3]
+        pos_z = keypoint[...,2:keypoint.shape[-1]:3]
+        pos_x = pos_x - offset.permute(1,0,2)[...,0]
+        pos_y = pos_y - offset.permute(1,0,2)[...,1]
+        pos_z = pos_z - offset.permute(1,0,2)[...,2]
+        # shape: (length,16)->(length,16,1)->(length,16,3)->(length,48)
+        keypoint = torch.cat([pos_x.unsqueeze(-1), pos_y.unsqueeze(-1), pos_z.unsqueeze(-1)], dim=-1).reshape(length,-1)
+        ### 将keypoints映射到[-1,1]之间
+        d_max = torch.max(keypoint, dim=-1)[0].unsqueeze(1)
+        # d_max shape: (batch)->(batch, 1)
+        d_min = torch.min(keypoint, dim=-1)[0].unsqueeze(1)
+        # print("d_min shape: ", d_min.shape)
+        dst = d_max - d_min
+        keypoint = ((keypoint - d_min) / (dst+0.00001) - 0.5) / 0.5 
+        # shape: (length,48)
+        return keypoint
+
+    def __len__(self):
+        return self.data_dict[-1][-1]
+
+    def __getitem__(self, index):
+        ind_bool = [index in i for i in self.data_dict]
+        ind = ind_bool.index(True)  # ind表示该index属于第ind个视频
+        ind_frame = index - self.data_dict[ind][0]
+
+        dir = self.dir_name[ind][:-2]
+        # print("dir: ", dir)
+        sub_dir = self.dir_name[ind][-1]
+        # print(dir, sub_dir)
+        image_dir = os.path.join(self.dataset_path, self.scene, dir, sub_dir)
+        image = self._load_image(image_dir, ind_frame)
+        feature_path = os.path.join(self.dataset_path, "features", dir, self.scene, sub_dir, "feature_01frames.npy")
+        feature = np.load(feature_path)
+        # 获取文件夹的数字前缀：91_09_drunk_walk->91_09
+        if dir[2] == '_':
+            front_num = dir[0:5]
+        else:
+            front_num = dir[0:6]
+        keypoints_path = os.path.join(self.dataset_path, "keypoints", front_num+"_worldpos.csv")
+        
+        ## 特征的维度必须是31
+        if ind_frame-30 < 0:
+            motion_np = feature[0:ind_frame+1,:]
+            motion_zero = np.zeros((30-ind_frame,13))
+            motion_np = np.concatenate([motion_zero, motion_np], axis=0)
+        else:
+            motion_np = feature[ind_frame-30:ind_frame+1,:]
+        motion = torch.from_numpy(motion_np).type(torch.float32).unsqueeze(0).permute(0,2,1)
+        # print("motion shape: ", motion.shape)
+        keypoints = self.load_keypoints(keypoints_path, ind_frame, 1)
+        # print("keypoints_ shape: ", keypoints_.shape)
+        label = keypoints
+        # print("label shape: ", label.shape)
+        return self.transform(image), label, motion
+
+if __name__=='__main__':
+    config_path = '/home/litianyi/data/EgoMotion/meta_remy.yml'
+    dataset_path = '/home/litianyi/data/EgoMotion/'
+    import torchvision
+    
+    class Scale():
+        def __init__(self, size, interpolation=Image.BILINEAR):
+            self.worker = torchvision.transforms.Resize(size, interpolation)
+
+        def __call__(self, img):
+            return self.worker(img)
+        
+    class ToTorchFormatTensor(object):
+    # Converts a PIL.Image (RGB) or numpy.ndarray (H x W x C) in the range [0, 255]
+    # to a torch.FloatTensor of shape (C x H x W) in the range [0.0, 1.0] """
+        def __init__(self, div=True):
+            self.div = div
+
+        def __call__(self, pic):
+            if isinstance(pic, np.ndarray):
+                # handle numpy array
+                img = torch.from_numpy(pic).permute(2, 0, 1).contiguous()
+            else:
+                # handle PIL Image
+                img = torch.ByteTensor(torch.ByteStorage.from_buffer(pic.tobytes()))
+                img = img.view(pic.size[1], pic.size[0], len(pic.mode))
+                # put it from HWC to CHW format
+                # yikes, this transpose takes 80% of the loading time/CPU
+                img = img.transpose(0, 1).transpose(0, 2).contiguous()
+            return img.float().div(255) if self.div else img.float()
+
+    class GroupNormalize(object):
+        def __init__(self, mean, std):
+            self.mean = mean
+            self.std = std
+
+        def __call__(self, tensor):
+            rep_mean = self.mean * (tensor.size()[0]//len(self.mean))
+            rep_std = self.std * (tensor.size()[0]//len(self.std))
+
+            # TODO: make efficient
+            for t, m, s in zip(tensor, rep_mean, rep_std):
+                t.sub_(m).div_(s)
+
+            return tensor
+
+    dataset = EgoMotionDataset(dataset_path=dataset_path,
+                               config_path=config_path,
+                               image_tmpl="{:04d}.jpg",
+                               image_transform=torchvision.transforms.Compose([
+                                                Scale(256),
+                                                ToTorchFormatTensor(),
+                                                GroupNormalize(
+                                                    mean=[.485, .456, .406],
+                                                    std=[.229, .224, .225])
+                                                ]), 
+                               L=20,
+                               test_mode=False)
+    from torch.utils.data import DataLoader
+    train_loader = DataLoader(dataset=dataset, batch_size=16, 
+                              shuffle=True,num_workers=8, pin_memory=True)
+    for i, (image, label, motion) in enumerate(train_loader):
+        # print("image shape: ", image.shape)
+        print("motion shape: ", motion.shape)
+        # print("label shape: ", label.shape)
+    # with open(config_path, 'r') as f:
+    #     config = yaml.load(f.read(), Loader=yaml.FullLoader)
+    # data_list = config['train']
+    # mocap_frames = config['mocap_frames']
+    # video_frames = config['video_frames']
+    # data_dict = []
+    # scene = 'lab'
+    # len = 0
+    # for i in data_list:  # 02_01_walk
+    #     for j in video_frames[i][scene]: # 1,2,...,6
+    #         # print("dir: ", i)
+    #         # print("sub_dir: ", j)
+    #         # print("video frames: ", video_frames[i][scene][j])
+    #         # print("mocap frames: ", mocap_frames[i])
+    #         data_dict.append(range(len, len + min(video_frames[i][scene][j]+1, mocap_frames[i])))
+    #         len += min(video_frames[i][scene][j]+1, mocap_frames[i])
+    # print(data_dict[-1][-1])

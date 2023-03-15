@@ -133,7 +133,7 @@ class EgoNet(nn.Module):
                                     nn.MaxPool2d(kernel_size=3, stride=1, padding=1, dilation=2),
                                 )
         self.fc = nn.Linear(8192, 16)
-        self.fc1 = nn.Linear(528, 45)
+        self.fc1 = nn.Linear(528, 48)   ###与预先定义的关节数量有关
         self.fc2 = nn.Linear(528, 3)
         self.fc3 = nn.Linear(528, 3)
         self.mapping = nn.Tanh()  ###将关节输出映射到[-1,1]之间

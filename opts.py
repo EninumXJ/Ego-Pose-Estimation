@@ -3,7 +3,7 @@ parser = argparse.ArgumentParser(description="EgoPose Estimation")
 parser.add_argument('--dataset_path', type=str, help='path to your dataset')
 parser.add_argument('--config_path', type=str, help='path to your config')
 parser.add_argument('--exp_name', type=str, help='path to save models')
-
+parser.add_argument('--dataset', type=str, default='EgoMotion', choices=['Yuan', 'EgoMotion'])
 # ========================= Model Configs ==========================
 parser.add_argument('--dropout', '--do', default=0.5, type=float,
                     metavar='DO', help='dropout ratio (default: 0.5)')

@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import DataLoader
-from ego_pose.data_process import MoCapDataset
+from ego_pose.data_process import MoCapDataset, EgoMotionDataset
 from ego_pose.transforms import *
 from ego_pose.model import *
 from ego_pose.loss import *
@@ -47,27 +47,49 @@ def main():
         else:
             print(("=> no checkpoint found at '{}'".format(args.resume)))
 
-    train_data = MoCapDataset(dataset_path=args.dataset_path, 
-                              config_path=args.config_path, 
-                              image_tmpl="{:05d}.png", 
-                              image_transform=torchvision.transforms.Compose([
-                                        Scale(256),
-                                        ToTorchFormatTensor(),
-                                        GroupNormalize(
-                                            mean=[.485, .456, .406],
-                                            std=[.229, .224, .225])
-                                        ]), test_mode=False)
+    if args.dataset == 'Yuan':
+        train_data = MoCapDataset(dataset_path=args.dataset_path, 
+                                config_path=args.config_path, 
+                                image_tmpl="{:05d}.png", 
+                                image_transform=torchvision.transforms.Compose([
+                                            Scale(256),
+                                            ToTorchFormatTensor(),
+                                            GroupNormalize(
+                                                mean=[.485, .456, .406],
+                                                std=[.229, .224, .225])
+                                            ]), test_mode=False)
 
-    val_data = MoCapDataset(dataset_path=args.dataset_path, 
-                              config_path=args.config_path, 
-                              image_tmpl="{:05d}.png", 
-                              image_transform=torchvision.transforms.Compose([
-                                        Scale(256),
-                                        ToTorchFormatTensor(),
-                                        GroupNormalize(
-                                            mean=[.485, .456, .406],
-                                            std=[.229, .224, .225])
-                                        ]), test_mode=True)
+        val_data = MoCapDataset(dataset_path=args.dataset_path, 
+                                config_path=args.config_path, 
+                                image_tmpl="{:05d}.png", 
+                                image_transform=torchvision.transforms.Compose([
+                                            Scale(256),
+                                            ToTorchFormatTensor(),
+                                            GroupNormalize(
+                                                mean=[.485, .456, .406],
+                                                std=[.229, .224, .225])
+                                            ]), test_mode=True)
+    if args.dataset == 'EgoMotion':
+        train_data = EgoMotionDataset(dataset_path=args.dataset_path, 
+                                config_path=args.config_path, 
+                                image_tmpl="{:04d}.jpg", 
+                                image_transform=torchvision.transforms.Compose([
+                                            Scale(256),
+                                            ToTorchFormatTensor(),
+                                            GroupNormalize(
+                                                mean=[.485, .456, .406],
+                                                std=[.229, .224, .225])
+                                            ]), test_mode=False)
+        val_data = EgoMotionDataset(dataset_path=args.dataset_path, 
+                                config_path=args.config_path, 
+                                image_tmpl="{:04d}.jpg", 
+                                image_transform=torchvision.transforms.Compose([
+                                            Scale(256),
+                                            ToTorchFormatTensor(),
+                                            GroupNormalize(
+                                                mean=[.485, .456, .406],
+                                                std=[.229, .224, .225])
+                                            ]), test_mode=True)
 
     train_loader = DataLoader(dataset=train_data, batch_size=args.batch_size, 
                               shuffle=True,num_workers=args.workers, pin_memory=True)
@@ -138,7 +160,8 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
         
         keypoint, head1, head2 = model(foreground, motion_input)
         
-        loss = ComputeLoss(keypoint, head1, head2, label)
+        # loss = ComputeLoss(keypoint, head1, head2, label)
+        loss = ComputeLoss_nohead(keypoint, label)
         losses.update(loss.item(), image.shape[0])
         # optimizer.zero_grad()
         loss.backward()
@@ -159,15 +182,6 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
             logger.info("lr: {:.5f} \tBatch({:>3}/{:>3}) done. Loss: {:.4f}".format(optimizer.param_groups[0]['lr'], i+1, max_iter, loss.data.item()))
 
 
-        # if i > max_iter:
-        #     break
-        # if i % args.print_freq == 0:
-        #     print(('Epoch: [{0}][{1}/{2}], lr: {lr:.5f}\t'
-        #           'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-        #           'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-        #           'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-        #            epoch, i, len(train_loader), batch_time=batch_time,
-        #            data_time=data_time, loss=losses, lr=optimizer.param_groups[-1]['lr'])))
 
 
 def validate(val_loader, model, device, batch_num=None, logger=None):
@@ -190,7 +204,8 @@ def validate(val_loader, model, device, batch_num=None, logger=None):
             motion_input = motion.to(device)
             keypoint, head1, head2 = model(foreground, motion_input)
             
-            loss = ComputeLoss(keypoint, head1, head2, label)
+            # loss = ComputeLoss(keypoint, head1, head2, label)
+            loss = ComputeLoss_nohead(keypoint, label)
             losses.update(loss.item(), image.shape[0])
 
             # measure elapsed time
@@ -208,7 +223,7 @@ def validate(val_loader, model, device, batch_num=None, logger=None):
         #           'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
         #            i, len(val_loader), batch_time=batch_time, loss=losses)))
 
-    print(('Testing Results: Loss {loss.avg:.5f}'.format(loss=losses)))
+    logger.info('Testing Results: Loss {loss.avg:.5f}'.format(loss=losses))
 
     return loss
 
