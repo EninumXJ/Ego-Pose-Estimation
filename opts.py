@@ -31,6 +31,7 @@ parser.add_argument('--weight-decay', '--wd', default=5e-4, type=float,
 parser.add_argument('--clip-gradient', '--gd', default=None, type=float,
                     metavar='W', help='gradient norm clipping (default: disabled)')
 parser.add_argument('--optimizer', type=str, choices=['SGD','Adam'])
+parser.add_argument('--norm', type=str, choices=['L1','L2'])
 # ========================= Monitor Configs ==========================
 parser.add_argument('--print-freq', '-p', default=20, type=int,
                     metavar='N', help='print frequency (default: 10)')

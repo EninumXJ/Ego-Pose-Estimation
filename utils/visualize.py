@@ -378,7 +378,7 @@ def PlotLPose2D(keypoints, L, head1=None, head2=None, offset=None,
     # ax.auto_scale_xyz([-1, 1], [-1, 21], [-1, 1])
     # ax.set_aspect('equal', adjustable='box')
     # ax.set_box_aspect(aspect = (1,4,1))
-    plt.savefig(image_name, dpi=500)
+    plt.savefig(image_name, dpi=800)
 
 if __name__=='__main__':
     keypoint = np.array([[ 0.0945,  0.0125,  0.1152,  0.1040,  0.0359,  0.8434,  0.1053,  0.0562,

@@ -367,10 +367,10 @@ class EgoMotionDataset(Dataset):
         ind = ind_bool.index(True)  # ind表示该index属于第ind个视频
         ind_frame = index - self.data_dict[ind][0]
         dir = self.dir_name[ind][:-2]
-        print("dir: ", dir)
+        # print("dir: ", dir)
         sub_dir = self.dir_name[ind][-1]
-        print(dir, sub_dir)
-        print("ind_frame: ", ind_frame)
+        # print(dir, sub_dir)
+        # print("ind_frame: ", ind_frame)
         feature_path = os.path.join(self.dataset_path, "features", dir, self.scene, sub_dir, "feature_10frames.npy")
         # 获取文件夹的数字前缀：91_09_drunk_walk->91_09
         if dir[2] == '_':

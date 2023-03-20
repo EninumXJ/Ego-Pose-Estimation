@@ -47,9 +47,9 @@ def inference(label, motion, Model, length, start_pose, end_pose, device, index)
     ys = ys.squeeze(0).cpu().detach().numpy()
     label = label.squeeze(0)[1:-1].cpu().detach().numpy()
     print("label shape: ", label.shape)
-    image_name = "Skeleton"+'_'+str(index)
+    image_name = "Skeleton"+'_'+str(index)+'.svg'
     image_path = os.path.join(save_path, image_name)
-    label_name = "Label"+'_'+str(index)
+    label_name = "Label"+'_'+str(index)+'.svg'
     label_path = os.path.join(save_path, label_name)
     PlotLPose2D(label, length, image_name=label_path, gt_flag=True)
     PlotLPose2D(ys, length, image_name=image_path, gt_flag=False)
@@ -65,7 +65,7 @@ def inference(label, motion, Model, length, start_pose, end_pose, device, index)
     #     DrawSkeleton(label_.squeeze(0)[:], head1=None, head2=None, image_name=label_path, dataset='EgoMotion')
     #     DrawSkeleton(keypoint[0], head1=None, head2=None, image_name=image_path, dataset='EgoMotion')
 
-index = 12350
+index = 19330
 exp_name = 'train19'
 length = 20
 path = os.getcwd()

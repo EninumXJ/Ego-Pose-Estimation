@@ -156,12 +156,12 @@ def main():
             adjust_learning_rate(optimizer, epoch, args.lr_steps)
 
         # train for one epoch
-        train(train_loader, model, optimizer, lr_scheduler, device, logger=logger, backbone=backbone_model, args=args)
+        train(train_loader, model, optimizer, lr_scheduler, device, logger=logger, backbone=None, args=args)
 
         # evaluate on validation set
         if (epoch + 1) % args.eval_freq == 0 or epoch == args.epochs - 1:
             logger.info(" Eval epoch: {}".format(epoch + 1))
-            loss1 = validate(val_loader, model, device, 50, logger, backbone_model, args)
+            loss1 = validate(val_loader, model, device, 50, logger, None, args)
 
             # remember best prec@1 and save checkpoint
             is_best = loss1 < best_loss
@@ -214,7 +214,10 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
             # tgt_mask shape:(batch,length,length)
             output = model(src, tgt, src_mask, tgt_mask)
             # output shape:(batch,length,pose_dim)
-            loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz')
+            if args.norm == 'L1':
+                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L1')
+            if args.norm == 'L2':
+                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L2')
             if torch.isnan(loss).any():
                 print("src: ", src)
                 print("tgt: ", tgt)
@@ -271,7 +274,10 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
             # tgt_mask shape:(batch,length,length)
             output = model(src, tgt, src_mask, tgt_mask)
             # output shape:(batch,length,pose_dim)
-            loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz')
+            if args.norm == 'L1':
+                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L1')
+            if args.norm == 'L2':
+                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L2')
            
             losses.update(loss.item(), label.shape[0])
             # optimizer.zero_grad()
@@ -319,7 +325,10 @@ def validate(val_loader, model, device, batch_num=None, logger=None, backbone=No
                 # tgt_mask shape:(batch,length,length)
                 output = model(src, tgt, src_mask, tgt_mask)
                 # output shape:(batch,length,pose_dim)label = label.to(device)     
-                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz')
+                if args.norm == 'L1':
+                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L1')
+                if args.norm == 'L2':
+                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L2')
                 losses.update(loss.item(), label.shape[0])
 
                 # measure elapsed time
@@ -336,7 +345,7 @@ def validate(val_loader, model, device, batch_num=None, logger=None, backbone=No
                 #           'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                 #           'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
                 #            i, len(val_loader), batch_time=batch_time, loss=losses)))
-                logger.info('Testing Results: Loss {loss.avg:.5f}'.format(loss=losses))
+            logger.info('Testing Results: Loss {loss.avg:.5f}'.format(loss=losses))
 
         else:
             for i, (image, label) in tqdm(enumerate(val_loader), total=max_iter):
@@ -362,7 +371,10 @@ def validate(val_loader, model, device, batch_num=None, logger=None, backbone=No
                 # tgt_mask shape:(batch,length,length)
                 output = model(src, tgt, src_mask, tgt_mask)
                 # output shape:(batch,length,pose_dim)
-                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz')
+                if args.norm == 'L1':
+                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L1')
+                if args.norm == 'L2':
+                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L2')
             
                 losses.update(loss.item(), label.shape[0])
                 

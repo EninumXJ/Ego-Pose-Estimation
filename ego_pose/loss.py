@@ -45,10 +45,13 @@ def ComputeLoss(keypoints, label, L=15):
 ###
 # order = 'xyz'时：label和keypoints的排序方式为：(xyz,xyz,xyz)
 # order = 'xxx'时：label和keypoints的排序方式为：(xxx,yyy,zzz)
-def ComputeLoss_nohead(keypoints, label, L=15, order='xyz', dataset="EgoMotion"):
+def ComputeLoss_nohead(keypoints, label, L=15, order='xyz', dataset="EgoMotion", norm='L2'):
     # label = label.squeeze()
     keypoints_g = label
-    loss_d = torch.sum(torch.abs(keypoints - keypoints_g))
+    if norm == 'L1':
+        loss_d = torch.sum(torch.abs(keypoints - keypoints_g))
+    if norm == 'L2':
+        loss_d = torch.sum(torch.norm(keypoints - keypoints_g))
     # print("loss_d: ", loss_d.shape)
     # print("loss_o: ", loss_o.shape)
     if order == 'xyz':
