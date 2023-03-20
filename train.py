@@ -119,8 +119,8 @@ def main():
             adjust_learning_rate(optimizer, epoch, args.lr_steps)
 
         # train for one epoch
-        train(train_loader, model, optimizer, lr_scheduler, device, 200, logger)
-
+        # train(train_loader, model, optimizer, lr_scheduler, device, 200, logger)
+        train(train_loader, model, optimizer, scheduler=None, device=device, logger=logger)
         # evaluate on validation set
         if (epoch + 1) % args.eval_freq == 0 or epoch == args.epochs - 1:
             logger.info(" Eval epoch: {}".format(epoch + 1))
@@ -152,15 +152,20 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
     model.train()
     for i, (image, label, motion) in tqdm(enumerate(train_loader), total=len(train_loader)):
         data_time.update(time.time() - end)
-        label = label.to(device)
+        # label shape: (32,1,48)->(32,48)
+        label = label.to(device).squeeze()
         with torch.no_grad():
             foreground = build_foreground(image)
         foreground = foreground.to(device)
         motion_input = motion.to(device)
         
-        keypoint, head1, head2 = model(foreground, motion_input)
+        keypoint = model(foreground, motion_input)
       
         # loss = ComputeLoss(keypoint, head1, head2, label)
+        # print("keypoint shape: ", keypoint.shape)
+        # keypoint shape: (32,48)
+        # print("label shape: ", label.shape)
+        # label shape: (32,1,48)
         loss = ComputeLoss_nohead(keypoint, label)
         # print("loss: ", loss)
         losses.update(loss.item(), image.shape[0])
@@ -173,7 +178,7 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
             #     print("clipping gradient: {} with coef {}".format(total_norm, args.clip_gradient / total_norm))
 
         optimizer.step()
-        scheduler.step()
+        # scheduler.step()
         optimizer.zero_grad()
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -181,8 +186,6 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
 
         if i % args.print_freq == 0:
             logger.info("lr: {:.5f} \tBatch({:>3}/{:>3}) done. Loss: {:.4f}".format(optimizer.param_groups[0]['lr'], i+1, max_iter, loss.data.item()))
-
-
 
 
 def validate(val_loader, model, device, batch_num=None, logger=None):
@@ -198,12 +201,12 @@ def validate(val_loader, model, device, batch_num=None, logger=None):
     model.eval()
     for i, (image, label, motion) in tqdm(enumerate(val_loader), total=max_iter):
         with torch.no_grad():
-            label = label.to(device)
+            label = label.to(device).squeeze()
             foreground = build_foreground(image)
             # motion_input = build_motion_history(R, d)
             foreground = foreground.to(device)
             motion_input = motion.to(device)
-            keypoint, head1, head2 = model(foreground, motion_input)
+            keypoint = model(foreground, motion_input)
             
             # loss = ComputeLoss(keypoint, head1, head2, label)
             loss = ComputeLoss_nohead(keypoint, label)
@@ -225,7 +228,6 @@ def validate(val_loader, model, device, batch_num=None, logger=None):
         #            i, len(val_loader), batch_time=batch_time, loss=losses)))
 
     logger.info('Testing Results: Loss {loss.avg:.5f}'.format(loss=losses))
-
     return loss
 
 def save_checkpoint(state, save_path, is_best=True, filename='checkpoint.pth.tar'):

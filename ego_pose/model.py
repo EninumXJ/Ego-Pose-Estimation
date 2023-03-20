@@ -161,7 +161,12 @@ class EgoNet(nn.Module):
         # cat
         
         fusion_feature = torch.cat((motion_feature, shape_feature), dim=1)
-        keypoint = self.mapping(self.fc1(fusion_feature))
-        head1 = self.fc2(fusion_feature)
-        head2 = self.fc3(fusion_feature)
-        return keypoint, head1, head2
+        keypoint = self.fc1(fusion_feature)
+        d_max = torch.max(keypoint, dim=-1)[0].unsqueeze(1)
+        d_min = torch.min(keypoint, dim=-1)[0].unsqueeze(1)
+        dst = d_max - d_min
+        keypoint = ((keypoint - d_min) / (dst+0.00001) - 0.5) / 0.5 
+        return keypoint
+        # head1 = self.fc2(fusion_feature)
+        # head2 = self.fc3(fusion_feature)
+        # return keypoint, head1, head2
