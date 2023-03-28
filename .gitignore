@@ -9,3 +9,6 @@ __pycache__/
 data/
 transformer.ipynb
 实验记录.markdown
+animate.py
+read_bvh.py
+save_pose.py
