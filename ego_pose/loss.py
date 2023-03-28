@@ -47,11 +47,13 @@ def ComputeLoss(keypoints, label, L=15):
 # order = 'xxx'时：label和keypoints的排序方式为：(xxx,yyy,zzz)
 def ComputeLoss_nohead(keypoints, label, L=15, order='xyz', dataset="EgoMotion", norm='L2'):
     # label = label.squeeze()
+    # print("keypoints shape: ", keypoints.shape)
+    # print("label shape: ", label.shape)
     keypoints_g = label
     if norm == 'L1':
         loss_d = torch.sum(torch.abs(keypoints - keypoints_g))
     if norm == 'L2':
-        loss_d = torch.sum(torch.norm(keypoints - keypoints_g))
+        loss_d = torch.sum(torch.norm(keypoints - keypoints_g, dim=-1))
     # print("loss_d: ", loss_d.shape)
     # print("loss_o: ", loss_o.shape)
     if order == 'xyz':
@@ -70,6 +72,18 @@ def ComputeLoss_nohead(keypoints, label, L=15, order='xyz', dataset="EgoMotion",
             LeftUpLeg = keypoints[..., 42:45] 
             LeftLeg = keypoints[..., 45:48]
             LeftFoot = keypoints[..., 48:51]
+            RightBone0 = BoneLength(RightShoulder, RightArm)
+            RightBone1 = BoneLength(RightArm, RightForeArm)
+            RightBone2 = BoneLength(RightForeArm, RightHand)
+            RightBone3 = BoneLength(RightUpLeg, RightLeg)
+            RightBone4 = BoneLength(RightLeg, RightFoot)
+            LeftBone0 = BoneLength(LeftShoulder, LeftArm)
+            LeftBone1 = BoneLength(LeftArm, LeftForeArm)
+            LeftBone2 = BoneLength(LeftForeArm, LeftHand)
+            LeftBone3 = BoneLength(LeftUpLeg, LeftLeg)
+            LeftBone4 = BoneLength(LeftLeg, LeftFoot)
+            loss_s = torch.abs(RightBone0-LeftBone0) + torch.abs(RightBone1-LeftBone1) + torch.abs(RightBone2-LeftBone2) + \
+                    torch.abs(RightBone3-LeftBone3) + torch.abs(RightBone4-LeftBone4)
         if dataset == 'EgoMotion':
             RightArm = keypoints[..., 12:15]
             RightForeArm = keypoints[..., 15:18]

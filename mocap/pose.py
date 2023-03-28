@@ -92,8 +92,8 @@ def interpolated_traj(poses, sample_t=0.03333333, mocap_fr=120):
 if __name__=='__main__':
     import sys
     print(sys.path)
-    sys.path.append('/data1/lty/workspace/paper_code/utils')
-    fname = '/data1/lty/dataset/egopose_dataset/datasets/traj/1205_take_15.bvh'
+    sys.path.append('/home/liumin/litianyi/workspace/project/Ego-Pose-Estimation/utils')
+    fname = '/home/liumin/litianyi/workspace/data/datasets/traj/0213_take_01.bvh'
     with open(fname) as f:
         mocap = Bvh(f.read())
     print(mocap)

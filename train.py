@@ -215,9 +215,9 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
             output = model(src, tgt, src_mask, tgt_mask)
             # output shape:(batch,length,pose_dim)
             if args.norm == 'L1':
-                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L1')
+                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', dataset=args.dataset, norm='L1')
             if args.norm == 'L2':
-                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L2')
+                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', dataset=args.dataset, norm='L2')
             if torch.isnan(loss).any():
                 print("src: ", src)
                 print("tgt: ", tgt)
@@ -275,9 +275,9 @@ def train(train_loader, model, optimizer, scheduler, device, batch_num=None, log
             output = model(src, tgt, src_mask, tgt_mask)
             # output shape:(batch,length,pose_dim)
             if args.norm == 'L1':
-                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L1')
+                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', dataset=args.dataset, norm=args.norm)
             if args.norm == 'L2':
-                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L2')
+                loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', dataset=args.dataset, norm=args.norm)
            
             losses.update(loss.item(), label.shape[0])
             # optimizer.zero_grad()
@@ -326,9 +326,9 @@ def validate(val_loader, model, device, batch_num=None, logger=None, backbone=No
                 output = model(src, tgt, src_mask, tgt_mask)
                 # output shape:(batch,length,pose_dim)label = label.to(device)     
                 if args.norm == 'L1':
-                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L1')
+                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', dataset=args.dataset, norm=args.norm)
                 if args.norm == 'L2':
-                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L2')
+                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', dataset=args.dataset, norm=args.norm)
                 losses.update(loss.item(), label.shape[0])
 
                 # measure elapsed time
@@ -372,9 +372,9 @@ def validate(val_loader, model, device, batch_num=None, logger=None, backbone=No
                 output = model(src, tgt, src_mask, tgt_mask)
                 # output shape:(batch,length,pose_dim)
                 if args.norm == 'L1':
-                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L1')
+                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', dataset=args.dataset, norm=args.norm)
                 if args.norm == 'L2':
-                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', norm='L2')
+                    loss = ComputeLoss_nohead(output[:,:-1,:], label[:,1:-1,:], args.L, order='xyz', dataset=args.dataset, norm=args.norm)
             
                 losses.update(loss.item(), label.shape[0])
                 

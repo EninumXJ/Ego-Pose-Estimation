@@ -76,6 +76,7 @@ class Generator(nn.Module):
 		x_min = torch.min(state, dim=-1)[0].unsqueeze(-1)
 		x_max = torch.max(state, dim=-1)[0].unsqueeze(-1)
 		return ((state-x_min)/(x_max-x_min+0.0001)-0.5)/0.5
+		# return state
 	
 class LayerNorm(nn.Module):
 	def __init__(self, features, eps=1e-6):

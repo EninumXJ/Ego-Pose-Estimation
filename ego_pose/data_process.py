@@ -213,13 +213,13 @@ class MoCapDataset(Dataset):
         pos_z = pos_z - offset.permute(1,0,2)[...,2]
         # shape: (length,17)->(length,17,1)->(length,17,3)->(length,51)
         keypoint = torch.cat([pos_x.unsqueeze(-1), pos_y.unsqueeze(-1), pos_z.unsqueeze(-1)], dim=-1).reshape(length,-1)
-        ### 将keypoints映射到[-1,1]之间
-        d_max = torch.max(keypoint, dim=-1)[0].unsqueeze(1)
-        # d_max shape: (batch)->(batch, 1)
-        d_min = torch.min(keypoint, dim=-1)[0].unsqueeze(1)
-        # print("d_min shape: ", d_min.shape)
-        dst = d_max - d_min
-        keypoint = ((keypoint - d_min) / dst - 0.5) / 0.5 
+        # ### 将keypoints映射到[-1,1]之间
+        # d_max = torch.max(keypoint, dim=-1)[0].unsqueeze(1)
+        # # d_max shape: (batch)->(batch, 1)
+        # d_min = torch.min(keypoint, dim=-1)[0].unsqueeze(1)
+        # # print("d_min shape: ", d_min.shape)
+        # dst = d_max - d_min
+        # keypoint = ((keypoint - d_min) / dst - 0.5) / 0.5 
         # shape: (length,51)
         return keypoint
 

@@ -6,12 +6,13 @@ from mocap.skeleton import Skeleton
 fname = '/home/liumin/litianyi/workspace/data/datasets/traj/1205_take_15.bvh'
 with open(fname) as f:
     mocap = Bvh(f.read())
+print(mocap)
 print("Number of joints: ",len(mocap.get_joints_names()))
 print("Number of frames: ", mocap.nframes)
 print(mocap.get_joints_names())
 pname = '/home/liumin/litianyi/workspace/data/datasets/traj/1205_take_15_traj.p'
 traj = pickle.load(open(pname, 'rb'))
-print(traj[0].shape)
+print(traj[0])
 
 skeleton = Skeleton()
 exclude_bones = {'Thumb', 'Index', 'Middle', 'Ring', 'Pinky', 'End', 'Toe'}

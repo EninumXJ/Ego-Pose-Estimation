@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 # keypoints: ndarray [1, 51]
 def DrawSkeleton(keypoints, offset=None, head1=None, head2=None, 
                  image_name='Skeleton.jpg', dataset='EgoMotion'):
-    plt.rcParams['figure.figsize'] = (14.0, 5.0) # 设置figure_size尺寸
+    plt.rcParams['figure.figsize'] = (5.0, 5.0) # 设置figure_size尺寸
     pos_x = keypoints[0:len(keypoints):3]
     pos_z = keypoints[1:len(keypoints):3]
     pos_y = keypoints[2:len(keypoints):3]
@@ -35,11 +35,19 @@ def DrawSkeleton(keypoints, offset=None, head1=None, head2=None,
         #画起点为head,终点为u_end的向量
         ax.quiver(head[0], head[1], head[2], u[0]*10, u[1]*10, u[2]*10, color='blue', arrow_length_ratio=0.2)
     
-    radius = 1.2
+    radius = 1
     ax.set_xlim3d([-radius, radius])
-    ax.set_ylim3d([-radius, 20*radius])
+    ax.set_ylim3d([-radius, radius])
     ax.set_zlim3d([-radius, radius])
-    ax.view_init(elev=0., azim=0)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_zticks([])
+    frame = plt.gca()
+    frame.axes.get_xaxis().set_visible(False)
+    frame.axes.get_yaxis().set_visible(False)
+    frame.axes.get_zaxis().set_visible(False)
+    # ax.axis('off')
+    ax.view_init(elev=15., azim=75)
     # 拉长y轴
     # x_scale=0.8
     # y_scale=6
@@ -47,15 +55,15 @@ def DrawSkeleton(keypoints, offset=None, head1=None, head2=None,
     # scale=np.diag([x_scale, y_scale, z_scale, 1.0])
     # scale=scale*(1/scale.max())
     # scale[3,3]=0.2
-    scale=np.diag([1, 5, 1, 1.0])
-    def short_proj():
-        return np.dot(Axes3D.get_proj(ax), scale)
+    # scale=np.diag([1, 5, 1, 1.0])
+    # def short_proj():
+    #     return np.dot(Axes3D.get_proj(ax), scale)
 
-    ax.get_proj=short_proj
-    ax.set_box_aspect(aspect = (0.8,3,0.8))
+    # ax.get_proj=short_proj
+    # ax.set_box_aspect(aspect = (0.8,3,0.8))
     # ax.set_aspect('equal')
 
-    ax.dist = 6
+    ax.dist = 7.5
 
     if dataset == 'Yuan':
         # 3D scatter
